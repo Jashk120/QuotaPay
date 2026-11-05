@@ -1,9 +1,11 @@
 # QuotaPay — Adversarial Test Report
 
-10 tests, 13 distinct prongs. 7 pass on the original implementation; 3 fail,
-exposing real defects. 10/10 mutants killed. 3/3 failing tests flip to pass
-under minimal fixes. Suite committed as `69d8805`; this report and the
-verdict-parsing fix to the runners follow in the same series.
+10 tests, 13 distinct prongs. 8 pass on the current implementation; T02 and
+T06 fail, exposing the two remaining open defects (D2, D3). D1 was fixed
+(see §2) and its test now passes. 10/10 mutants killed on the pre-fix tree.
+3/3 failing tests flipped to pass under minimal fixes during validation.
+Suite committed as `69d8805`; D1 fix, harness hardening and this report
+follow on top.
 
 Harness: `solc-js 0.8.28` (cancun, optimizer 200 runs) + in-process `ganache`
 + `ethers v6`, run with `node --test test/*.test.mjs`. No devnet, no private
@@ -30,15 +32,17 @@ A consequence for verdict honesty: `spent`/`totalSpent`/`companySpent` can
 only grow via `charge()`, so any invariant over nonzero spend is
 statically identified but not dynamically exercised here (noted per case).
 
-## 2. Defects exposed (failing on the original implementation)
+## 2. Defects exposed
 
-### D1 — Rotation does not revoke; reassignment orphans (T01, both prongs fail)
-`CompanyPaymaster._enroll` only adds mappings, never clears them.
-After rotating beneficiary B1 from W1 to W2, W1 stays authorized and keeps
-spending the shared allowance — the key-compromise rotation scenario stays
-compromised. Reassigning W3 from B1 to B2 leaves B1 active with no wallet.
-Severity: medium-high. Fix-validated (F1): tracking `beneficiaryWallet` and
-clearing stale links flips T01 to 3/3 pass.
+### D1 — Rotation did not revoke; reassignment orphaned (FIXED)
+`CompanyPaymaster._enroll` only added mappings, never cleared them: after
+rotating beneficiary B1 from W1 to W2, W1 stayed authorized, and reassigning
+W3 from B1 to B2 left B1 active with no wallet.
+Fix (committed): new `beneficiaryWallet` registry; on (re)enrollment the
+previous wallet of the beneficiary is deactivated and unmapped, and a wallet
+arriving from another beneficiary deactivates that prior beneficiary instead
+of orphaning it. T01 now passes 3/3 with no regressions (full suite:
+8 pass, T02/T06 still fail as designed). Severity had been medium-high.
 
 ### D2 — Authorized does not imply chargeable (T02, both prongs fail)
 `enroll()` accepts `perPeriodLimit = 0` (or `< creditPerTx`) while
@@ -65,7 +69,7 @@ deploy-then-fund pattern) — enforcement belongs on the factory path.
 
 | # | Test | Invariant | Original | Kills |
 |---|---|---|---|---|
-| T01 | rotation unlink | re-enrollment clears stale wallet/beneficiary links | FAIL (D1) | fix F1 flips to pass |
+| T01 | rotation unlink | re-enrollment clears stale wallet/beneficiary links | pass (D1 fixed) | was FAIL pre-fix |
 | T02 | dead beneficiary | authorized ⇒ chargeable | FAIL (D2) | fix F2 flips to pass |
 | T03 | signed enrollment | single-use, instance-bound, malleability-proof EIP-712 | pass | M2 (replay), M3 (high-s) |
 | T04 | withdrawal lifecycle | one pending request, delay-gated, exact payout, release | pass | M4 (no release), M9 (no delay) |
@@ -139,5 +143,15 @@ node scripts/mutate.mjs all        # expect 10/10 KILLED, contracts restored
 node scripts/fixvalidate.mjs all   # expect 3/3 PASS-WITH-FIX, contracts restored
 ```
 
-Expected on the current implementation: T01, T02, T06 fail (defects D1–D3);
-all others pass.
+Expected on the current implementation: T02 and T06 fail (open defects D2,
+D3); all others pass, including T01 after the D1 fix.
+
+### Harness note (ganache native-balance reads)
+During D1 verification, T04 transiently failed on `treasury must receive
+exactly the request` with a 0n delta. On-chain state proved the transfer
+correct (raw `eth_getBalance`: treasury +3 ETH, paymaster −3 ETH, receipt
+status 1, reservation released) while ethers' `provider.getBalance`
+persistently returned the pre-tx value for that account in the same process.
+Native-balance assertions now go through `chain.nativeBalance()` (raw
+`eth_getBalance` RPC), which was fresh in every observation. Contract
+storage reads were never affected.

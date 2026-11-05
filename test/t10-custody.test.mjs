@@ -26,7 +26,7 @@ test("T10 custody: deposit/withdraw exactness and stake forwarding", async () =>
 
   // (i) deposit credits the tank.
   await (await qpv.connect(owner).deposit({ value: ethers.parseEther("2") })).wait();
-  assert.equal(await chain.provider.getBalance(Q), ethers.parseEther("2"));
+  assert.equal(await chain.nativeBalance(Q), ethers.parseEther("2"));
 
   // Non-owner withdraw.
   await expectRevert(() => qpv.connect(outsider).withdraw.staticCall(P, 1n), "not owner");
@@ -40,10 +40,10 @@ test("T10 custody: deposit/withdraw exactness and stake forwarding", async () =>
   await expectRevert(() => qpv.connect(owner).withdraw.staticCall(P, ethers.parseEther("3")), "withdraw failed");
 
   // (ii) exact payout.
-  const p0 = await chain.provider.getBalance(P);
+  const p0 = await chain.nativeBalance(P);
   await (await qpv.connect(owner).withdraw(P, ethers.parseEther("2"))).wait();
-  assert.equal(await chain.provider.getBalance(P), p0 + ethers.parseEther("2"));
-  assert.equal(await chain.provider.getBalance(Q), 0n);
+  assert.equal(await chain.nativeBalance(P), p0 + ethers.parseEther("2"));
+  assert.equal(await chain.nativeBalance(Q), 0n);
 
   // (iii) stake forwarding: value + delay reach the registry, staker is the paymaster.
   await (await qpv.connect(outsider).stake(86400, { value: ethers.parseEther("0.5") })).wait();

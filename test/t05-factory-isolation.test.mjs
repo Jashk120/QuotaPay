@@ -69,8 +69,8 @@ test("T05 factory: uniqueness, authorization, isolation", async () => {
   const c1 = new ethers.Contract(paymasterAddr, artifacts.CompanyPaymaster.abi, alice);
   const c2addr = (await factory.companies(id(54))).paymaster;
   const c2 = new ethers.Contract(c2addr, artifacts.CompanyPaymaster.abi, bob);
-  assert.equal(await chain.provider.getBalance(paymasterAddr), ethers.parseEther("5"));
-  assert.equal(await chain.provider.getBalance(c2addr), ethers.parseEther("1"));
+  assert.equal(await chain.nativeBalance(paymasterAddr), ethers.parseEther("5"));
+  assert.equal(await chain.nativeBalance(c2addr), ethers.parseEther("1"));
   await (await c1.setGlobalCreditLimit(10n)).wait();
   assert.equal(await c1.globalCreditLimit(), 10n);
   assert.equal(await c2.globalCreditLimit(), 1000n, "company 2 limit must be unaffected");

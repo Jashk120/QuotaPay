@@ -73,6 +73,8 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
 
     // Per-transaction charge binding.
     mapping(address => bytes32) public chargedHash;
+    // Current wallet per beneficiary, so rotation revokes the previous key.
+    mapping(bytes32 => address) public beneficiaryWallet;
 
     // EIP-712 replay protection.
     mapping(bytes32 => bool) public usedEnrollment;
@@ -374,6 +376,20 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     ) internal {
         require(beneficiaryId != bytes32(0), "beneficiary=0");
         require(wallet != address(0), "wallet=0");
+
+        // Key swap: the previous wallet of this beneficiary loses
+        // authorization, and a wallet arriving from another beneficiary
+        // deactivates that prior beneficiary instead of orphaning it.
+        address prevWallet = beneficiaryWallet[beneficiaryId];
+        if (prevWallet != address(0) && prevWallet != wallet) {
+            walletActive[prevWallet] = false;
+            walletBeneficiary[prevWallet] = bytes32(0);
+        }
+        bytes32 priorBeneficiary = walletBeneficiary[wallet];
+        if (priorBeneficiary != bytes32(0) && priorBeneficiary != beneficiaryId) {
+            beneficiaries[priorBeneficiary].active = false;
+        }
+        beneficiaryWallet[beneficiaryId] = wallet;
 
         Beneficiary storage b = beneficiaries[beneficiaryId];
         // Preserve an existing period/spend so rotating to a new wallet does not

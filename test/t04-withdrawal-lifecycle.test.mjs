@@ -28,7 +28,7 @@ test("T04 withdrawal lifecycle: gating, exact payout, release", async () => {
   );
   const P = await pm.getAddress();
 
-  const bal = () => chain.provider.getBalance(P);
+  const bal = () => chain.nativeBalance(P);
   const avail = () => pm.availableBalance();
 
   // Non-admin cannot request.
@@ -47,9 +47,9 @@ test("T04 withdrawal lifecycle: gating, exact payout, release", async () => {
 
   // Mature the delay, execute: exact payout, reservation released.
   await chain.increaseTime(1200);
-  const t0 = await chain.provider.getBalance(T);
+  const t0 = await chain.nativeBalance(T);
   await (await pm.connect(admin).executeWithdrawal()).wait();
-  const t1 = await chain.provider.getBalance(T);
+  const t1 = await chain.nativeBalance(T);
   assert.equal(t1 - t0, ethers.parseEther("3"), "treasury must receive exactly the request");
   assert.equal(await pm.pendingWithdrawals(), 0n, "reservation must be released");
   assert.equal(await avail(), await bal(), "available must equal balance after release");

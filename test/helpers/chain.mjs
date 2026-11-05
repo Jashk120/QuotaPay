@@ -20,6 +20,15 @@ export async function newChain() {
       await gp.request({ method: "evm_increaseTime", params: [seconds] });
       await gp.request({ method: "evm_mine", params: [] });
     },
+    /// Raw-RPC native balance. Use instead of `provider.getBalance` for
+    /// assertions: in this setup (ganache in-process, NodeJS fallback)
+    /// ethers' `getBalance` intermittently returns pre-tx balances for
+    /// pre-funded accounts while the identical raw `eth_getBalance` call
+    /// is always fresh. Contract storage reads are unaffected.
+    async nativeBalance(address) {
+      const hex = await gp.request({ method: "eth_getBalance", params: [address, "latest"] });
+      return BigInt(hex);
+    },
   };
 }
 
