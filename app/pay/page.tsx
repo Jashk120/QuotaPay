@@ -242,7 +242,7 @@ export default function PayPage() {
               <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                 Session address
               </div>
-              <div className="mt-1 break-all font-mono text-xs">
+              <div className="mt-1 break-all font-mono text-xs" data-testid="session-address">
                 {session?.address ?? "generating…"}
               </div>
             </div>
@@ -361,7 +361,7 @@ export default function PayPage() {
       </div>
 
       {signed ? (
-        <Card>
+        <Card data-testid="signed-tx">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-primary" /> Signed frame

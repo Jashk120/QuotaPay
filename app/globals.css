@@ -67,7 +67,6 @@
     -webkit-mask-image: radial-gradient(ellipse at center, black, transparent 75%);
     mask-image: radial-gradient(ellipse at center, black, transparent 75%);
   }
-
   .text-balance {
     text-wrap: balance;
   }

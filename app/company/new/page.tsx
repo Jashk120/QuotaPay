@@ -212,7 +212,7 @@ export default function NewCompanyPage() {
       ) : null}
 
       {created ? (
-        <Card className="border-primary/40">
+        <Card className="border-primary/40" data-testid="company-created">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-primary" />

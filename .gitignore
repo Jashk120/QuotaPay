@@ -15,6 +15,14 @@ build/
 *.tsbuildinfo
 .artifacts-cache.json
 
+# playwright
+test-results/
+playwright-report/
+blob-report/
+
+# next dev generated agent notes
+AGENTS.md
+
 # env
 .env
 .env*.local

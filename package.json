@@ -11,7 +11,9 @@
     "codec": "node scripts/codec-check.mjs",
     "deploy": "node scripts/deploy.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "test": "node --test \"test/*.test.mjs\""
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.1",
@@ -27,6 +29,7 @@
     "viem": "^2.57.16"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.3",

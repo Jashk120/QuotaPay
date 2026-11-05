@@ -62,6 +62,19 @@ npm test        # 10 adversarial test files / 19 subtests
 > or `smoke` times out, check `eth_blockNumber`; the transaction stays in the
 > mempool and the resume path above completes it when blocks resume.
 
+## UI tests (Playwright)
+
+```powershell
+npx playwright install chromium   # once
+npm run test:e2e                  # starts the app on :3100 in demo mode
+```
+
+The suite drives the real UI end to end: it generates a beneficiary session
+key, registers a company with a paymaster, authorizes that session wallet,
+adds and revokes a second user, builds/signs a four-frame sponsored payment,
+and verifies the disabled-submission guard. It runs with
+`NEXT_PUBLIC_DEMO_MODE=true`, so it never depends on the devnet.
+
 ## Pages
 
 | Route | Who | What |

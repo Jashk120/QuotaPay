@@ -1,3 +1,5 @@
+const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
 export const config = {
   chainId: Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 1337),
   rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "http://localhost:14337/rpc",
@@ -14,11 +16,13 @@ export const config = {
   explorerUrl:
     process.env.NEXT_PUBLIC_EXPLORER_URL ??
     "https://explorer.altmempool.wtf",
-  submitEnabled: process.env.NEXT_PUBLIC_ENABLE_SUBMIT === "true",
+  demoMode,
+  submitEnabled:
+    !demoMode && process.env.NEXT_PUBLIC_ENABLE_SUBMIT === "true",
 };
 
 /** True when a factory address is configured, i.e. admin actions can go on-chain. */
-export const isLiveConfigured = Boolean(config.factoryAddress);
+export const isLiveConfigured = !demoMode && Boolean(config.factoryAddress);
 
 export const demoDefaults = {
   globalCreditLimit: 500n,

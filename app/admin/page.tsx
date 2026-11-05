@@ -567,6 +567,7 @@ export default function AdminPage() {
                     <tr
                       key={`${row.companyId}:${row.wallet}`}
                       className="border-b border-border/40 last:border-0"
+                      data-testid="beneficiary-row"
                     >
                       <td className="py-3 pr-4 font-mono text-xs" title={row.wallet}>
                         {row.wallet.slice(0, 8)}…{row.wallet.slice(-6)}
