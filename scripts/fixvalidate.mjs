@@ -92,6 +92,14 @@ const fixes = {
 
 const which = process.argv[2] ?? "all";
 const ids = which === "all" ? Object.keys(fixes) : [which];
+
+function suiteResult(out) {
+  const passes = [...out.matchAll(/pass (\d+)/g)].map((m) => parseInt(m[1], 10));
+  const fails = [...out.matchAll(/fail (\d+)/g)].map((m) => parseInt(m[1], 10));
+  const p = passes.length > 0 ? passes[passes.length - 1] : 0;
+  const f = fails.length > 0 ? fails[fails.length - 1] : 0;
+  return { p, f };
+}
 for (const id of ids) {
   const f = fixes[id];
   const backups = new Map();
@@ -104,7 +112,8 @@ for (const id of ids) {
     }
     const r = spawnSync("node", ["--test", f.test], { cwd: ROOT, timeout: 240000, encoding: "utf8" });
     const out = (r.stdout ?? "") + (r.stderr ?? "");
-    const passed = /# pass [1-9]/.test(out) && !/# fail [1-9]/.test(out);
+    const { p: npass, f: nfail } = suiteResult(out);
+    const passed = npass > 0 && nfail === 0;
     console.log(`${id} (${f.test}): ${passed ? "PASS-WITH-FIX (sensitive, fails for the right reason)" : "STILL-FAILING — investigate"}`);
     if (!passed) {
       const lines = out.split("\n").filter((l) => /AssertionError|BUG|Error:/.test(l)).slice(0, 8);

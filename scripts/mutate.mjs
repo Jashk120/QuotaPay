@@ -76,6 +76,14 @@ const mutants = {
   },
 };
 
+function suiteResult(out) {
+  // node:test summary block: "pass N" / "fail N" lines (glyph-prefixed).
+  const passes = [...out.matchAll(/pass (\d+)/g)].map((m) => parseInt(m[1], 10));
+  const fails = [...out.matchAll(/fail (\d+)/g)].map((m) => parseInt(m[1], 10));
+  const p = passes.length > 0 ? passes[passes.length - 1] : 0;
+  const f = fails.length > 0 ? fails[fails.length - 1] : 0;
+  return { p, f };
+}
 const which = process.argv[2] ?? "all";
 const ids = which === "all" ? Object.keys(mutants) : [which];
 const results = [];
@@ -91,7 +99,8 @@ for (const id of ids) {
   fs.writeFileSync(fp, orig.replace(m.old, m.new));
   const r = spawnSync("node", ["--test", m.test], { cwd: ROOT, timeout: 240000, encoding: "utf8" });
   const out = (r.stdout ?? "") + (r.stderr ?? "");
-  const passed = /# pass 1/.test(out) && !/# fail [1-9]/.test(out);
+  const { p, f } = suiteResult(out);
+  const passed = p > 0 && f === 0;
   results.push(`${id} (${m.file} :: ${m.test}): ${passed ? "SURVIVED — TEST VACUOUS" : "KILLED"}`);
   fs.writeFileSync(fp, orig); // restore
   // verify restoration
