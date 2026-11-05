@@ -1,1 +1,3 @@
 build/
+node_modules/
+test/helpers/.artifacts-cache.json

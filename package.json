@@ -1,0 +1,15 @@
+{
+  "name": "quotapay-adversarial-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Adversarial invariant tests for QuotaPay contracts (local EVM reachable surface)",
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "devDependencies": {
+    "ethers": "6.13.4",
+    "ganache": "7.9.2",
+    "solc": "0.8.28"
+  }
+}
