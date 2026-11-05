@@ -11,6 +11,10 @@ next-env.d.ts
 # generated solidity artifacts
 build/
 
+# tool caches
+*.tsbuildinfo
+.artifacts-cache.json
+
 # env
 .env
 .env*.local

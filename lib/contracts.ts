@@ -2,6 +2,7 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  defineChain,
   http,
   keccak256,
   stringToHex,
@@ -11,7 +12,15 @@ import {
 import { config } from "./config";
 import { companyPaymasterAbi } from "./abis";
 
+export const devnet = defineChain({
+  id: config.chainId,
+  name: "QuotaPay devnet",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: { default: { http: [config.rpcUrl] } },
+});
+
 export const publicClient = createPublicClient({
+  chain: devnet,
   transport: http(config.rpcUrl),
 });
 
@@ -31,10 +40,14 @@ export function getInjected(): Eip1193 | undefined {
   return (window as unknown as { ethereum?: Eip1193 }).ethereum;
 }
 
-export function getWalletClient() {
+export function getWalletClient(account?: Address) {
   const injected = getInjected();
   if (!injected) throw new Error("No injected wallet found. Install MetaMask.");
-  return createWalletClient({ transport: custom(injected) });
+  return createWalletClient({
+    chain: devnet,
+    transport: custom(injected),
+    account,
+  });
 }
 
 export type PaymasterSnapshot = {
