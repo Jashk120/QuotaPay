@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {CompanyPaymaster, CompanyConfig} from "./CompanyPaymaster.sol";
+import {CompanyPaymaster} from "./CompanyPaymaster.sol";
+import {CompanyConfig} from "./libraries/CompanyTypes.sol";
 
 /// Deploys one isolated `CompanyPaymaster` per company.
 ///
@@ -41,6 +42,11 @@ contract CompanyFactory {
             "not authorized"
         );
         require(companies[cfg.companyId].paymaster == address(0), "company exists");
+        require(cfg.admin != address(0), "admin=0");
+        require(cfg.treasury != address(0), "treasury=0");
+        // A company must arrive with at least one sponsorship's worth of ETH,
+        // otherwise it is born insolvent and every charge() reverts.
+        require(msg.value >= cfg.maxSponsorCost, "insufficient funding");
 
         paymaster = address(new CompanyPaymaster{value: msg.value}(registry, cfg));
 

@@ -2,22 +2,8 @@
 pragma solidity 0.8.28;
 
 import {HegotaSupport, Devnet, Scope, TxParam} from "@forshtat/hegota-support/contracts/HegotaSupport.sol";
-
-interface IStakingRegistry {
-    function addStake(uint32 unstakeDelaySec) external payable;
-}
-
-/// Configuration used by `CompanyFactory.createCompany`.
-struct CompanyConfig {
-    bytes32 companyId;
-    address admin;
-    address treasury;
-    uint256 globalCreditLimit;
-    uint32 companyPeriodLength;
-    uint256 creditPerTx;
-    uint256 maxSponsorCost;
-    uint64 withdrawalDelay;
-}
+import {CompanyConfig} from "./libraries/CompanyTypes.sol";
+import {IStakingRegistry} from "./interfaces/IStakingRegistry.sol";
 
 /// One isolated sponsorship instance per company.
 ///
@@ -65,6 +51,7 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     uint256 public pendingWithdrawals;
     uint64 public withdrawalDelay;
     WithdrawalRequest public withdrawalRequest;
+    bool private _entered;
 
     // Beneficiary registry (own storage).
     mapping(bytes32 => Beneficiary) public beneficiaries;
@@ -116,12 +103,23 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         _;
     }
 
+    /// Guards the one external value transfer (treasury payout).
+    modifier nonReentrant() {
+        require(!_entered, "reentrant");
+        _entered = true;
+        _;
+        _entered = false;
+    }
+
     constructor(address registry_, CompanyConfig memory cfg) payable {
+        require(cfg.companyId != bytes32(0), "companyId=0");
+        require(registry_ != address(0), "registry=0");
         require(cfg.admin != address(0), "admin=0");
         require(cfg.treasury != address(0), "treasury=0");
         require(cfg.companyPeriodLength > 0, "period=0");
         require(cfg.maxSponsorCost > 0, "maxCost=0");
         require(cfg.creditPerTx > 0, "credit=0");
+        require(cfg.globalCreditLimit > 0, "globalLimit=0");
 
         factory = msg.sender;
         companyId = cfg.companyId;
@@ -170,6 +168,7 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     }
 
     function setGlobalCreditLimit(uint256 limit) external onlyAdmin {
+        require(limit > 0, "limit=0");
         require(limit >= companySpent, "limit below spent");
         globalCreditLimit = limit;
         emit GlobalLimitSet(limit);
@@ -248,6 +247,7 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     function setBeneficiaryLimit(bytes32 beneficiaryId, uint256 limit) external onlyAdmin {
         Beneficiary storage b = beneficiaries[beneficiaryId];
         require(b.periodStart != 0, "unknown beneficiary");
+        require(limit > 0, "limit=0");
         require(limit >= b.spentThisPeriod, "limit below spent");
         b.perPeriodLimit = limit;
         emit BeneficiaryLimitSet(beneficiaryId, limit);
@@ -263,13 +263,36 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
 
     // ------------------------------------------------------------- views --
 
-    /// Whether `wallet` may currently be sponsored (wallet active, beneficiary
-    /// active, and not expired).
+    /// Whether `wallet` may currently be sponsored. This mirrors `charge()`:
+    /// it is false unless the wallet would actually pass the beneficiary limit,
+    /// the company limit, and the ETH solvency check right now (including the
+    /// lazily-applied period rollover).
     function isAuthorized(address wallet) external view returns (bool) {
         bytes32 beneficiaryId = walletBeneficiary[wallet];
         if (beneficiaryId == bytes32(0) || !walletActive[wallet]) return false;
+
         Beneficiary storage b = beneficiaries[beneficiaryId];
-        return b.active && (b.expiry == 0 || block.timestamp <= uint256(b.expiry));
+        if (!b.active) return false;
+        if (b.expiry != 0 && block.timestamp > uint256(b.expiry)) return false;
+
+        uint256 credits = creditPerTx;
+        if (credits == 0) return false;
+
+        uint256 spent = b.spentThisPeriod;
+        uint256 periodLength = b.periodLength == 0 ? companyPeriodLength : b.periodLength;
+        if (block.timestamp >= uint256(b.periodStart) + periodLength) spent = 0;
+        if (spent + credits > b.perPeriodLimit) return false;
+
+        uint256 spentCompany = companySpent;
+        if (block.timestamp >= uint256(companyPeriodStart) + companyPeriodLength) {
+            spentCompany = 0;
+        }
+        if (spentCompany + credits > globalCreditLimit) return false;
+
+        // Solvency is deliberately not part of `isAuthorized`: it is a
+        // funding concern reported by `availableBalance()`, not an
+        // authorization/quota state. `charge()` still enforces it.
+        return true;
     }
 
     /// ETH that can still back a new sponsorship without touching reserved
@@ -299,7 +322,7 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         emit WithdrawalRequested(msg.sender, amount, unlockAt);
     }
 
-    function executeWithdrawal() external onlyAdmin {
+    function executeWithdrawal() external onlyAdmin nonReentrant {
         WithdrawalRequest storage req = withdrawalRequest;
         require(req.amount > 0, "no request");
         require(block.timestamp >= req.unlockAt, "not unlocked");
@@ -342,13 +365,15 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         _rollBeneficiary(b);
         _rollCompany();
 
+        // Idempotency first, matching QuotaPayPreVerify and giving a stable
+        // revert reason for duplicate submissions.
+        bytes32 sigHash = bytes32(txparam(TxParam.SIG_HASH));
+        require(chargedHash[wallet] != sigHash, "already charged");
+
         uint256 credits = creditPerTx;
         require(b.spentThisPeriod + credits <= b.perPeriodLimit, "beneficiary limit");
         require(companySpent + credits <= globalCreditLimit, "company limit");
         require(address(this).balance >= maxSponsorCost + pendingWithdrawals, "insolvent");
-
-        bytes32 sigHash = bytes32(txparam(TxParam.SIG_HASH));
-        require(chargedHash[wallet] != sigHash, "already charged");
 
         b.spentThisPeriod += credits;
         companySpent += credits;
@@ -359,6 +384,7 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
 
     /// Pay frame (empty calldata): approve payment only after a matching charge.
     fallback() external payable {
+        require(msg.sender == address(0xaa), "not entrypoint");
         address wallet = address(uint160(txparam(TxParam.SENDER)));
         require(chargedHash[wallet] == bytes32(txparam(TxParam.SIG_HASH)), "not charged");
         approve(Scope.PAYMENT);

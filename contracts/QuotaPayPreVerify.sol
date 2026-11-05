@@ -32,6 +32,7 @@ contract QuotaPayPreVerify is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     uint256 public totalSpent;
     uint256 public globalCap;
     uint256 public txFee;
+    bool private _entered;
 
     event CreditSet(address indexed user, uint256 value);
     event CapsSet(uint256 userCap, uint256 globalCap);
@@ -45,6 +46,13 @@ contract QuotaPayPreVerify is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         _;
     }
 
+    modifier nonReentrant() {
+        require(!_entered, "reentrant");
+        _entered = true;
+        _;
+        _entered = false;
+    }
+
     constructor(
         address owner_,
         address registry_,
@@ -52,6 +60,11 @@ contract QuotaPayPreVerify is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         uint256 globalCap_,
         uint256 txFee_
     ) payable {
+        require(owner_ != address(0), "owner=0");
+        require(registry_ != address(0), "registry=0");
+        require(userCap_ > 0, "userCap=0");
+        require(globalCap_ > 0, "globalCap=0");
+        require(txFee_ > 0, "fee=0");
         owner = owner_;
         registry = registry_;
         userCap = userCap_;
@@ -70,6 +83,8 @@ contract QuotaPayPreVerify is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
 
     /// Owner may retune the budgets; reaching a cap is no longer terminal.
     function setCaps(uint256 userCap_, uint256 globalCap_) external onlyOwner {
+        require(userCap_ > 0, "userCap=0");
+        require(globalCap_ > 0, "globalCap=0");
         require(globalCap_ >= totalSpent, "global below spent");
         userCap = userCap_;
         globalCap = globalCap_;
@@ -77,6 +92,7 @@ contract QuotaPayPreVerify is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     }
 
     function setTxFee(uint256 txFee_) external onlyOwner {
+        require(txFee_ > 0, "fee=0");
         txFee = txFee_;
         emit TxFeeSet(txFee_);
     }
@@ -93,7 +109,7 @@ contract QuotaPayPreVerify is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         totalSpent = 0;
     }
 
-    function withdraw(address payable to, uint256 amount) external onlyOwner {
+    function withdraw(address payable to, uint256 amount) external onlyOwner nonReentrant {
         require(to != address(0), "zero address");
         (bool ok, ) = to.call{value: amount}("");
         require(ok, "withdraw failed");
