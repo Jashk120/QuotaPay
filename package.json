@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "compat": "node scripts/compat-probe.mjs"
+    "compat": "node scripts/compat-probe.mjs",
+    "codec": "node scripts/codec-check.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.1",
@@ -27,7 +31,10 @@
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
+    "ethers": "^6.13.4",
+    "ganache": "^7.9.2",
     "postcss": "^8.4.49",
+    "solc": "0.8.28",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3"
   }

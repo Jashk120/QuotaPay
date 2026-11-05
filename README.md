@@ -23,6 +23,45 @@ npm run dev
 
 Open http://localhost:3000.
 
+## Deploy to the devnet
+
+```powershell
+npm run deploy
+```
+
+`deploy` compiles the contracts, deploys `CompanyFactory`, creates a demo
+company (`acme`), stakes the paymaster as its own ERC-8421 entity, enrolls a
+demo beneficiary, verifies the code, and writes `deployments/1337.json` plus
+`.env.local`.
+
+If a factory deployment was already broadcast but has not been mined (the public
+devnet occasionally stalls), resume it instead of broadcasting a second one:
+
+```powershell
+$env:RESUME_FACTORY="0x<factory>"; npm run deploy
+```
+
+Then run the real end-to-end sponsored transaction:
+
+```powershell
+npm run smoke
+```
+
+`npm run codec` verifies that the app's devnet wire codec
+(`lib/devnetFrameTx.ts`) is byte-identical to the proven
+`@forshtat/hegota-support` codec (wire bytes, sign payload, RPC shape and the
+`v || r || s` signature).
+
+## Tests
+
+```powershell
+npm test        # 10 adversarial test files / 19 subtests
+```
+
+> The public devnet miner has been observed to stall for minutes. If `deploy`
+> or `smoke` times out, check `eth_blockNumber`; the transaction stays in the
+> mempool and the resume path above completes it when blocks resume.
+
 ## Pages
 
 | Route | Who | What |

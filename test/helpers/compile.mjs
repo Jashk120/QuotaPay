@@ -76,7 +76,7 @@ export function compileAll() {
     settings: {
       evmVersion: "cancun",
       optimizer: { enabled: true, runs: 200 },
-      outputSelection: { "*": { "*": ["abi", "evm.bytecode.object"] } },
+      outputSelection: { "*": { "*": ["abi", "evm.bytecode.object", "evm.deployedBytecode.object"] } },
     },
   };
   const output = JSON.parse(solc.compile(JSON.stringify(input), { import: findImports }));
@@ -89,7 +89,11 @@ export function compileAll() {
   const artifacts = {};
   for (const [file, contracts] of Object.entries(output.contracts)) {
     for (const [name, c] of Object.entries(contracts)) {
-      artifacts[name] = { abi: c.abi, bytecode: "0x" + c.evm.bytecode.object };
+      artifacts[name] = {
+        abi: c.abi,
+        bytecode: "0x" + c.evm.bytecode.object,
+        deployedBytecode: "0x" + c.evm.deployedBytecode.object,
+      };
     }
   }
   for (const need of ["CompanyPaymaster", "CompanyFactory", "QuotaPayPreVerify", "MockRegistry", "RevertingTreasury"]) {

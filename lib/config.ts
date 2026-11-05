@@ -6,6 +6,9 @@ export const config = {
   factoryAddress: (process.env.NEXT_PUBLIC_FACTORY_ADDRESS ?? "") as
     | `0x${string}`
     | "",
+  defaultPaymaster: (process.env.NEXT_PUBLIC_DEFAULT_PAYMASTER ?? "") as
+    | `0x${string}`
+    | "",
   stakingRegistry: (process.env.NEXT_PUBLIC_STAKING_REGISTRY ??
     "0xd51c04d7a0b01124e84de152f4e56d9eecb22d2f") as `0x${string}`,
   explorerUrl:

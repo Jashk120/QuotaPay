@@ -1,4 +1,5 @@
 import type { Address, Hex } from "viem";
+import { config } from "./config";
 
 export type DemoCompany = {
   companyId: string;
@@ -79,7 +80,8 @@ export function setActivePaymaster(paymaster: string) {
 }
 
 export function getActivePaymaster(): string {
-  return read<string>(KEYS.activePaymaster, "");
+  const stored = read<string>(KEYS.activePaymaster, "");
+  return stored || config.defaultPaymaster;
 }
 
 export function listBeneficiaries(companyId: string): DemoBeneficiary[] {
