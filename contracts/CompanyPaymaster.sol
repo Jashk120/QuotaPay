@@ -57,11 +57,11 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     mapping(bytes32 => Beneficiary) public beneficiaries;
     mapping(address => bytes32) public walletBeneficiary;
     mapping(address => bool) public walletActive;
+    // Current wallet per beneficiary, so rotation revokes the previous key.
+    mapping(bytes32 => address) public beneficiaryWallet;
 
     // Per-transaction charge binding.
     mapping(address => bytes32) public chargedHash;
-    // Current wallet per beneficiary, so rotation revokes the previous key.
-    mapping(bytes32 => address) public beneficiaryWallet;
 
     // EIP-712 replay protection.
     mapping(bytes32 => bool) public usedEnrollment;
@@ -235,13 +235,26 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     }
 
     function revokeWallet(address wallet) external onlyAdmin {
+        _clearWalletLink(wallet);
         walletActive[wallet] = false;
         emit WalletRevoked(wallet);
     }
 
     function setWalletActive(address wallet, bool active) external onlyAdmin {
+        if (!active) _clearWalletLink(wallet);
         walletActive[wallet] = active;
         emit WalletActiveSet(wallet, active);
+    }
+
+    /// Drop the forward beneficiary->wallet link when a wallet is deliberately
+    /// deauthorized, so a later rotation never touches it again. The reverse
+    /// entry is kept as history; authorization checks already fail on the
+    /// cleared forward link and the inactive flag.
+    function _clearWalletLink(address wallet) internal {
+        bytes32 bId = walletBeneficiary[wallet];
+        if (bId != bytes32(0) && beneficiaryWallet[bId] == wallet) {
+            beneficiaryWallet[bId] = address(0);
+        }
     }
 
     function setBeneficiaryLimit(bytes32 beneficiaryId, uint256 limit) external onlyAdmin {
@@ -406,14 +419,26 @@ contract CompanyPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         // Key swap: the previous wallet of this beneficiary loses
         // authorization, and a wallet arriving from another beneficiary
         // deactivates that prior beneficiary instead of orphaning it.
+        // The forward entry of the abandoned beneficiary is cleared so a
+        // later rotation cannot touch a wallet it no longer owns; the
+        // reverse check guards any entry that went stale by another path.
         address prevWallet = beneficiaryWallet[beneficiaryId];
-        if (prevWallet != address(0) && prevWallet != wallet) {
+        if (
+            prevWallet != address(0) &&
+            prevWallet != wallet &&
+            walletBeneficiary[prevWallet] == beneficiaryId
+        ) {
             walletActive[prevWallet] = false;
             walletBeneficiary[prevWallet] = bytes32(0);
+            emit WalletRevoked(prevWallet);
         }
         bytes32 priorBeneficiary = walletBeneficiary[wallet];
         if (priorBeneficiary != bytes32(0) && priorBeneficiary != beneficiaryId) {
             beneficiaries[priorBeneficiary].active = false;
+            if (beneficiaryWallet[priorBeneficiary] == wallet) {
+                beneficiaryWallet[priorBeneficiary] = address(0);
+            }
+            emit BeneficiaryRevoked(priorBeneficiary);
         }
         beneficiaryWallet[beneficiaryId] = wallet;
 

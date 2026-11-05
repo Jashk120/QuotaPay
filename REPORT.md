@@ -1,11 +1,13 @@
 # QuotaPay — Adversarial Test Report
 
-10 tests, 13 distinct prongs. 8 pass on the current implementation; T02 and
-T06 fail, exposing the two remaining open defects (D2, D3). D1 was fixed
-(see §2) and its test now passes. 10/10 mutants killed on the pre-fix tree.
-3/3 failing tests flipped to pass under minimal fixes during validation.
-Suite committed as `69d8805`; D1 fix, harness hardening and this report
-follow on top.
+10 test files, 23 checks, all green on the current tree. History: the
+original selection was 7 pass / 3 fail (defects D1–D3). D1 was fixed and
+verified (`Fix D1` commit); a follow-up stale-forward bug in that fix was
+reported, captured by new T01 prongs, and fixed. D2/D3 were closed by the
+parallel hardening commit `c590a2c` (isAuthorized mirrors chargeability,
+zero-config rejected, factory funding check, reentrancy guards); T02/T06
+now pass unmodified. 10/10 mutants killed on the pre-fix tree. 3/3 failing
+tests flipped to pass under minimal fixes during validation.
 
 Harness: `solc-js 0.8.28` (cancun, optimizer 200 runs) + in-process `ganache`
 + `ethers v6`, run with `node --test test/*.test.mjs`. No devnet, no private
@@ -44,7 +46,7 @@ arriving from another beneficiary deactivates that prior beneficiary instead
 of orphaning it. T01 now passes 3/3 with no regressions (full suite:
 8 pass, T02/T06 still fail as designed). Severity had been medium-high.
 
-### D2 — Authorized does not imply chargeable (T02, both prongs fail)
+### D2 - Authorized does not imply chargeable (CLOSED by c590a2c)
 `enroll()` accepts `perPeriodLimit = 0` (or `< creditPerTx`) while
 `isAuthorized` reports true, yet `charge()` on such a wallet must always
 revert (`0 + creditPerTx <= limit` is false — decided by fully observable
@@ -53,7 +55,7 @@ Fix-validated (F2): enforcing `perPeriodLimit >= creditPerTx` in the
 authorization read flips T02 to pass. Whether to enforce at enroll-time,
 view-time, or both is a design decision.
 
-### D3 — Configuration can silently brick the quota or void accounting (T06, 5/5 prongs fail)
+### D3 - Configuration can silently brick the quota or void accounting (CLOSED by c590a2c)
 No lower-bound validation: `setTxFee(0)` (accounting stays 0 while real ETH
 is sponsored), `setCaps(0,0)`, zero-value construction, `setGlobalCreditLimit(0)`,
 and value-less `createCompany` with `maxSponsorCost > 0` (company born
@@ -69,12 +71,12 @@ deploy-then-fund pattern) — enforcement belongs on the factory path.
 
 | # | Test | Invariant | Original | Kills |
 |---|---|---|---|---|
-| T01 | rotation unlink | re-enrollment clears stale wallet/beneficiary links | pass (D1 fixed) | was FAIL pre-fix |
-| T02 | dead beneficiary | authorized ⇒ chargeable | FAIL (D2) | fix F2 flips to pass |
+| T01 | rotation unlink | re-enrollment clears stale wallet/beneficiary links | pass | D1 fixed, then stale-forward follow-up fixed; prongs A/B/C/C2/D/D2 |
+| T02 | dead beneficiary | authorized ⇒ chargeable | pass | closed by c590a2c (isAuthorized mirrors chargeability) |
 | T03 | signed enrollment | single-use, instance-bound, malleability-proof EIP-712 | pass | M2 (replay), M3 (high-s) |
 | T04 | withdrawal lifecycle | one pending request, delay-gated, exact payout, release | pass | M4 (no release), M9 (no delay) |
 | T05 | factory isolation | unique id, auth-gated creation, independent balance/limits | pass | M5 (dup), M6 (open create) |
-| T06 | config liveness | config preserves chargeability / accounting integrity | FAIL (D3) | fix F3 flips to pass |
+| T06 | config liveness | config preserves chargeability / accounting integrity | pass | closed by c590a2c (zero-config rejected, factory funding check) |
 | T07 | access gates | owner/admin-only mutation, zero-address rejection | pass | M1 (gate removed) |
 | T08 | entrypoint gate | `charge()` only via `0xaa`; fallback needs frame context | pass | M7 (gate removed → reason changes) |
 | T09 | revocation | revoke ⇒ unauthorized; beneficiary-revoke dominates re-activation | pass | M8 (`walletActive` ignored) |
@@ -143,8 +145,10 @@ node scripts/mutate.mjs all        # expect 10/10 KILLED, contracts restored
 node scripts/fixvalidate.mjs all   # expect 3/3 PASS-WITH-FIX, contracts restored
 ```
 
-Expected on the current implementation: T02 and T06 fail (open defects D2,
-D3); all others pass, including T01 after the D1 fix.
+Expected on the current implementation: all green (23/23). T02/T06 now
+pass unmodified following the parallel `c590a2c` hardening; the mutation
+results in §4 and fix-validations in §1 predate that commit and remain the
+evidence for the passing tests' sensitivity.
 
 ### Harness note (ganache native-balance reads)
 During D1 verification, T04 transiently failed on `treasury must receive
