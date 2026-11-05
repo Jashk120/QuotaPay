@@ -13,6 +13,8 @@ const LOCAL_SOURCES = {
   "CompanyPaymaster.sol": "contracts/CompanyPaymaster.sol",
   "CompanyFactory.sol": "contracts/CompanyFactory.sol",
   "QuotaPayPreVerify.sol": "contracts/QuotaPayPreVerify.sol",
+  "CompanyTypes.sol": "contracts/libraries/CompanyTypes.sol",
+  "IStakingRegistry.sol": "contracts/interfaces/IStakingRegistry.sol",
   "mocks.sol": "test/helpers/mocks.sol",
 };
 
@@ -31,23 +33,26 @@ function findImports(importPath, importer) {
     const full = path.join(HEGOTA, rel);
     return { contents: fs.readFileSync(full, "utf8") };
   }
-  // Relative import inside the hegota-support package (HelperCalls etc.).
-  if (importer && !importer.includes("/") === false) {
-    void 0;
-  }
-  if (importPath.startsWith("./") || importPath.startsWith("../")) {
-    const base = importer && importer.includes("/") ? importer.slice(0, importer.lastIndexOf("/")) : null;
-    const candidates = [];
-    if (base) candidates.push(path.join(HEGOTA, "contracts", base, importPath));
-    candidates.push(path.join(HEGOTA, "contracts", importPath));
-    candidates.push(path.join(ROOT, "contracts", importPath));
-    for (const c of candidates) {
-      const norm = path.normalize(c);
-      if (fs.existsSync(norm)) return { contents: fs.readFileSync(norm, "utf8") };
+  // Solc canonicalizes "./libraries/X.sol" to "libraries/X.sol", so resolve
+  // relative imports against the importer's directory and both source roots.
+  const candidates = [];
+  if (importer) {
+    const importerDir = importer.includes("/")
+      ? importer.slice(0, importer.lastIndexOf("/"))
+      : "";
+    if (importerDir) {
+      candidates.push(path.join(ROOT, "contracts", importerDir, importPath));
+      candidates.push(path.join(HEGOTA, "contracts", importerDir, importPath));
     }
-    return { error: `unresolved relative import ${importPath} from ${importer}` };
   }
-  return { error: `unresolved import ${importPath}` };
+  candidates.push(path.join(ROOT, "contracts", importPath));
+  candidates.push(path.join(HEGOTA, "contracts", importPath));
+  candidates.push(path.join(ROOT, importPath));
+  for (const c of candidates) {
+    const norm = path.normalize(c);
+    if (fs.existsSync(norm)) return { contents: fs.readFileSync(norm, "utf8") };
+  }
+  return { error: `unresolved import ${importPath} from ${importer}` };
 }
 
 export function compileAll() {

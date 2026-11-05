@@ -56,7 +56,7 @@ test("T05 factory: uniqueness, authorization, isolation", async () => {
 
   // Governance path: only governance may create on behalf of others.
   const govFactory = await deploy(artifacts, "CompanyFactory", deployer, [A, R]);
-  await (await govFactory.connect(alice).createCompany(cfg(id(52), B, B))).wait(); // governance Alice, admin Bob
+  await (await govFactory.connect(alice).createCompany(cfg(id(52), B, B), { value: 100n })).wait(); // governance Alice, admin Bob
   const c52 = await govFactory.companies(id(52));
   assert.notEqual(c52.paymaster, ethers.ZeroAddress, "governance-created company must be tracked");
   await expectRevert(
