@@ -161,16 +161,16 @@ export default function PayPage() {
     try {
       let hash: Hex;
       try {
-        hash = await sendFrameSponsoredTransfer(config.rpcUrl, signed);
-        setStatus("Accepted by eth_sendFrameTransaction.");
-      } catch (frameError) {
-        setStatus("Frame RPC rejected it; trying the raw encoding…");
+        hash = await sendRawSponsoredTransfer(config.rpcUrl, signed);
+        setStatus("Accepted by eth_sendRawTransaction.");
+      } catch (rawError) {
+        setStatus("Raw RPC rejected it; trying eth_sendFrameTransaction…");
         try {
-          hash = await sendRawSponsoredTransfer(config.rpcUrl, signed);
-          setStatus("Accepted by eth_sendRawTransaction.");
-        } catch (rawError) {
+          hash = await sendFrameSponsoredTransfer(config.rpcUrl, signed);
+          setStatus("Accepted by eth_sendFrameTransaction.");
+        } catch (frameError) {
           throw new Error(
-            `Frame RPC: ${toMessage(frameError)}\nRaw RPC: ${toMessage(rawError)}`,
+            `Raw RPC: ${toMessage(rawError)}\nFrame RPC: ${toMessage(frameError)}`,
           );
         }
       }
