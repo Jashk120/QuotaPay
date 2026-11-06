@@ -18,7 +18,7 @@ is kept below as the historical proof log. Start here for the current system.
 | Company onboarding | `contracts/CompanyFactory.sol`, `contracts/CompanyPaymaster.sol` | live-tested; 23 contract subtests green |
 | Quota + solvency | per-beneficiary periods, company cap, `balance >= maxSponsorCost + pendingWithdrawals`, delayed withdrawal | green |
 | Blind-token paymaster | `contracts/BlindTokenPaymaster.sol`, `lib/blindToken.ts` | T11 7/7; dev 1536-bit issuer |
-| ZK membership paymaster | `circuits/Membership.circom`, `contracts/ZkPaymaster.sol` | T12–T15 green; CLI prove/deploy/sponsor; `/zk` browser flow. Groth16 verifier ~256k gas; 500k staked cap. **Mined on the public chain via local relay** (`0x0ccb70cc…`, block `0x41e`). Public mempool still enforces 100k + blocks BN254 precompiles. See `ZK.md` |
+| ZK membership paymaster | `circuits/Membership.circom`, `contracts/ZkPaymaster.sol` | T12–T15 green; CLI prove/deploy/sponsor; `/zk` browser flow. Groth16 verifier ~256k gas; 500k staked cap. **Mined on the public chain via local relay** (`0x0ccb70cc…`, block `0x41e`). Public mempool still enforces 100k + blocks BN254 precompiles (probed 2026-11-06). Mempool-safety + CROPS case in `ZK.md` ("Why this validation is safe for a public mempool") |
 | Devnet codec | `lib/devnetFrameTx.ts` (9-field envelope, `v‖r‖s`) | byte-identical to `@forshtat/hegota-support` (`npm run codec`) |
 | UI | Next.js 16: `/`, `/company/new`, `/admin`, `/pay`, `/blind` | Playwright 1/1; `next build` 7 routes |
 | Transport | `lib/anonRpc.tsx` | anon-rpc default, direct fallback, visible mode badge |

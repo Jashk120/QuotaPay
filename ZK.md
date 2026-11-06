@@ -199,6 +199,120 @@ other employees' indices and paths stay stable until the next root update.
 Changing the root invalidates every outstanding path; redistribute after each
 `add`/`remove`.
 
+## Why this validation is safe for a public mempool
+
+The objection, stated plainly: mempool nodes and builders simulate the
+validation prefix for free, so a big verify frame looks like unpaid work and a
+DoS vector. The answer has four parts: what validation actually costs, the
+griefing math, why builders still get paid, and why this needs no per-contract
+whitelist.
+
+### 1. Gas is not the node's cost; deterministic CPU is
+
+EVM gas prices *consensus execution*. A mempool node simulating admission pays
+only CPU, and for this verifier the CPU is almost entirely inside native
+precompiles (`ecAdd`/`ecMul`/`ecPairing`), not the EVM interpreter. Measured:
+
+- on-chain charge frame: **291,546 execution gas**, single-digit milliseconds;
+- ~181k of that is the 4-pair check, ~43k the public-input MSM, the rest
+  calldata decode and journaling.
+
+Frequency is bounded: once per admission, re-simulation only when a dependency
+changes, plus the builder's own candidate simulation. Results are keyed by tx
+hash, so an invalid proof simulates exactly once per node, then drops.
+Bandwidth per spam attempt is 581 bytes; storage per pending tx is one entry
+under the existing per-sender pending cap.
+
+### 2. The griefing math, and what caps should meter
+
+Getting simulated requires a well-formed tx with a **valid secp256k1
+signature** — invalid signatures drop before any EVM runs — plus bandwidth and
+one sender pending slot (one pending tx per sender). The node's cost per spam
+attempt is one deterministic simulation (~ms), with **no amplification**: our
+validation reads only tx fields, the sender, the paymaster's own storage, and
+precompiles. No shared mutable slot can be flipped to invalidate thousands of
+pending txs at once. The only cross-tx dependencies are the admin-controlled
+`root`/`epoch` (human timescales, transparent on-chain events) and a
+credential's own nullifier spend (self-inflicted).
+
+The honest version of the "10M gas" question: 10M gas of *arbitrary
+state-touching EVM* should indeed stay capped — that is what caps are for.
+But gas is the wrong meter for precompile-dominated verification. 10M gas of
+pairings is still milliseconds of CPU; the real risks are (a) CPU per
+admission, (b) state-dependency blast radius, (c) bandwidth. Our class passes
+all three with room: ~300k deterministic CPU, zero shared mutable reads, 581
+bytes. Demanding it fit 100k prices out all pairing-based privacy — the same
+literature the EIP reviewers cite (RAILGUN one-note spend 212k, withdrawal
+236k) — while buying no DoS protection, because a 100k frame of pathological
+EVM (memory expansion, cold reads) costs a node more CPU than our 300k of
+precompiles.
+
+### 3. Builders are paid; invalid work is evicted, not repeated
+
+Admission simulation is the only unpaid work, and it is ms-scale. Everything
+after `APPROVE(PAYMENT)` is covered: the payer escrows `max_cost` and builders
+collect fees from included txs exactly as today. An invalid proof reverts the
+`VERIFY` frame, so the tx is invalid, never included, the sponsor is never
+charged, and the builder wastes nothing beyond the one admission simulation.
+Prefixes that never approve are evicted rather than re-run forever (the
+producer re-execution bound in the EIP-8141 mempool discussion). FOCIL
+inclusion lists treat ours as an ordinary frame tx — no special handling.
+
+### 4. No whitelist: this fits the general expansive-tier ruleset
+
+The prefix shape — `[VERIFY(EXECUTION)` on sender, `DEFAULT` pre_verify on
+paymaster, `VERIFY(PAYMENT)`, `SENDER]` — is the ERC-8421 pre_verify pattern.
+Any node running the opt-in expansive ruleset admits this *class*. No
+code-hash exemption is requested (unlike the canonical-pool proposals) and no
+per-contract allowlist: `0x06`/`0x07`/`0x08` are protocol precompiles,
+permissionless by construction. Trace compliance of the current build:
+
+- staked payer (0.012 ETH ≥ 0.01 minimum), declared prefix ~346k ≤ 500k cap;
+- reads: tx fields + sender + paymaster's **own** storage (root, epoch,
+  nullifiers) — the staked-entity own-storage case, no third-party mutable
+  reads;
+- writes: own slots only, inside the pre_verify frame (its purpose);
+- external calls: one `STATICCALL` to a deployed, non-delegated verifier whose
+  trace reads no storage and — post-patch — uses no banned opcodes (`GAS`
+  forwarding replaced with fixed EIP-1108 costs);
+- one disclosed judgment call: a `BALANCE` read enforcing the withdrawal
+  reserve, stricter than the protocol's own `APPROVE` solvency check. If a
+  ruleset bans `BALANCE` even for staked payers, that line drops out and
+  `APPROVE` still reverts on insufficient escrow.
+
+Reproduce the cap evidence: `node scripts/probe-cap.mjs --rpc <url>
+--paymaster <addr> --execution 600000` prints the enforced cap in the
+rejection. As of 2026-11-06 both public endpoints still answer
+`prefix gas budget exceeded: 617800 > 100000 (MAX_VERIFY_GAS)` and block
+`0x06` — the limit removal has not landed where it can be observed. The
+working public-mempool option today is the local ERC-8421 relay (500k +
+precompiles), which lands on the same public chain (mined `0x0ccb70cc…`,
+block `0x41e`).
+
+### CROPS assessment
+
+- **Censorship resistance.** Permissionless submission over standard EIP-8141
+  RPC; no bundler/relayer monopoly; no per-contract gate — any ERC-8421 node
+  admits the class. Disclosed caveat: *eligibility* (the authorized set) is
+  admin-gated at the application layer. That is a sponsor choosing who spends
+  its own money, with rotation/removal transparent on-chain
+  (`RootSet`/`EpochSet`), not protocol censorship of anyone else's users.
+- **Openness.** Circuit, contracts, scripts, and sidecar patch are in-repo and
+  MIT — except the snarkjs-generated verifier (GPL-3.0, disclosed here). No
+  proprietary prover, no hosted dependency required to use it.
+- **Privacy.** The point of the design: membership proven, identity hidden;
+  rotating session keys; per-epoch nullifiers unlinkable across epochs;
+  optional anon-rpc transport. Residual disclosure — recipient and amount stay
+  public — is stated, not hidden.
+- **Security.** Groth16 soundness; the devnet ceremony is single-contribution
+  (production needs a real MPC or universal setup — stated); the circuit is
+  unaudited (stated). No fund-loss path: an invalid proof makes an invalid tx,
+  which is never included, so the sponsor is never charged. Replay is
+  impossible (nullifier burn + `chargedTx[sigHash]` binding); front-running a
+  proof cannot redirect funds (session-key binding burns the attacker's
+  chance along with the nullifier — first inclusion wins, and only the session
+  key holder can sign that tx).
+
 ## Nullifier model
 
 One sponsored transaction per credential per epoch:
