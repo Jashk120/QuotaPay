@@ -87,6 +87,20 @@ The sidecar's validation budget is `500_000`, which leaves ~140k (39%)
 headroom. The old 1M was ~2.8× the measured need. The sidecar patch uses 500k
 with this rationale.
 
+Measured on the self-hosted sidecar (2026-11-06):
+
+```text
+node scripts/probe-cap.mjs --rpc https://sidecar.161.118.164.226.nip.io/rpc \
+  --paymaster 0x0b65…61ee --execution 600000
+
+validation prefix execution gas sum 615000 + signature-verification cost 2800
+= 617800 exceeds MAX_VERIFY_GAS 500000
+```
+
+The sidecar enforces 500k for the sender; the message has **no staking
+qualifier**. The 100k value below is the public alt-mempool's default, not this
+deployment's.
+
 **On-chain Groth16 verification is now proven.** Via the local sidecar relay
 (~500k validation budget + full precompile list), a ZK sponsored tx mined on the
 public chain: `0x0ccb70cc…` in block `0x41e`, payer = `ZkPaymaster`, receipt
@@ -98,7 +112,7 @@ before proving (`identity nullifier is already spent`).
 `altmempool.forshtat.com/rpc` and `altmempoolgateway.forshtat.com/rpc`:
 
 1. Gas: `prefix gas budget exceeded: 617800 > 100000 (MAX_VERIFY_GAS)` — the
-   100k staked cap is still enforced. The limit was **not** removed.
+   public 100k cap is still enforced. The limit was **not** removed.
 2. Precompiles: even if the cap were lifted, the paymaster is rejected with
    `payer accesses un-deployed contract address 0x06` (`ecAdd`; `ecMul`
    `0x07` and pairing `0x08` would follow). The public allowlist does not
