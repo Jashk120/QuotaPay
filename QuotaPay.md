@@ -18,6 +18,7 @@ is kept below as the historical proof log. Start here for the current system.
 | Company onboarding | `contracts/CompanyFactory.sol`, `contracts/CompanyPaymaster.sol` | live-tested; 23 contract subtests green |
 | Quota + solvency | per-beneficiary periods, company cap, `balance >= maxSponsorCost + pendingWithdrawals`, delayed withdrawal | green |
 | Blind-token paymaster | `contracts/BlindTokenPaymaster.sol`, `lib/blindToken.ts` | T11 7/7; dev 1536-bit issuer |
+| ZK membership paymaster | `circuits/Membership.circom`, `contracts/ZkPaymaster.sol` | T12/T13 green; CLI prover/deploy; UI pending. Measured Groth16 verifier ~249k gas; 500k staked cap. See `ZK.md` |
 | Devnet codec | `lib/devnetFrameTx.ts` (9-field envelope, `v‖r‖s`) | byte-identical to `@forshtat/hegota-support` (`npm run codec`) |
 | UI | Next.js 16: `/`, `/company/new`, `/admin`, `/pay`, `/blind` | Playwright 1/1; `next build` 7 routes |
 | Transport | `lib/anonRpc.tsx` | anon-rpc default, direct fallback, visible mode badge |
@@ -37,11 +38,17 @@ is kept below as the historical proof log. Start here for the current system.
 - **Trust boundaries:** the issuer still knows how many credentials it issued
   and to whom (unless blind/fixed-batch issuance is added); per-user fairness
   is issuer-trusted. The deposit/global cap bounds total over-issuance.
-- **Not implemented:** full ZK (Merkle/accumulator membership, SNARK
-  rate-limit, shielded pool). That needs the 1M alt-mempool validation budget
-  and circuits. A Merkle proof hides *which* member, not the set size; anon-rpc
-  hides the RPC provider, not on-chain data; public-mempool front-running still
-  needs private orderflow.
+- **ZK membership (new, parallel path):** `circuits/Membership.circom` +
+  `contracts/ZkPaymaster.sol` prove Merkle membership and a per-epoch nullifier
+  without revealing which member. The Groth16/BN254 verifier measures 248,793
+  gasUsed (`scripts/zk-bench.mjs`), so the staked validation cap is **500k**
+  (declared prefix ~360k + 39% headroom), not the old 1M placeholder. Stock
+  100k cannot fit an on-chain Groth16 verifier. See `ZK.md`.
+- **Still not implemented:** full payment privacy (shielded pool hiding
+  recipient/amount), SNARK rate limiting beyond one payment per epoch, and a
+  production trusted-setup ceremony. A Merkle proof hides *which* member, not
+  the set size; anon-rpc hides the RPC provider, not on-chain data;
+  public-mempool front-running still needs private orderflow.
 
 ### 0.3 Deployments and devnet status
 
