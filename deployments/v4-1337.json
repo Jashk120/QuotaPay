@@ -1,0 +1,38 @@
+{
+  "chainId": 1337,
+  "rpc": "https://sidecar.161.118.164.226.nip.io/rpc",
+  "blockNumber": 6572,
+  "deployedAt": "2026-11-06T17:26:08.385Z",
+  "deployer": "0x348836a9b164f241945205B5a92f496BB8C3c1d8",
+  "source": {
+    "v4Core": "Uniswap/v4-core v4.0.0 (e50237c43811bd9b526eff40f26772152a42daba)",
+    "v4Periphery": "Uniswap/v4-periphery 1.0.4 (c6e4754dab11bd38c6f08ac51c3c868569e93d64)",
+    "solmate": "transmissions11/solmate (4b47a19038b798b4a33d9749d25e570443520647)"
+  },
+  "build": {
+    "solc": "0.8.26",
+    "evmVersion": "cancun",
+    "viaIR": true,
+    "optimizerRuns": 44444444,
+    "bytecodeHash": "none"
+  },
+  "contracts": {
+    "PoolManager": {
+      "address": "0xd5eeb6c94f70436b8748148c517b7a07d033435b",
+      "runtimeSize": 24009,
+      "owner": "0x348836a9b164f241945205B5a92f496BB8C3c1d8"
+    },
+    "StateView": {
+      "address": "0xd36bac46e06170d23476090e3eb17b5c0fa4f765",
+      "runtimeSize": 3531
+    },
+    "DaoSwapModuleFactory": {
+      "address": "0x8f4c325af50a3d4ca7bee14bfe3d7cd597707f95",
+      "runtimeSize": 7019
+    }
+  },
+  "poolManager": "0xd5eeb6c94f70436b8748148c517b7a07d033435b",
+  "stateView": "0xd36bac46e06170d23476090e3eb17b5c0fa4f765",
+  "daoSwapModuleFactory": "0x8f4c325af50a3d4ca7bee14bfe3d7cd597707f95",
+  "note": "No pools are seeded yet; run scripts/v4-seed.mjs after deploying a seeder."
+}
