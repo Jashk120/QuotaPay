@@ -98,7 +98,11 @@ export default function ZkPayPage() {
         onCredential={updateCredential}
       />
 
-      <ZkPaymentPanel session={session} credential={credential} />
+      <ZkPaymentPanel
+        session={session}
+        credential={credential}
+        onResetSession={reset}
+      />
 
       <Card>
         <CardHeader>

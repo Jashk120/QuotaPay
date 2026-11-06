@@ -57,7 +57,6 @@ import {
   type ZkWitness,
 } from "@/lib/zk/client";
 import { shortAddress } from "@/lib/utils";
-import { useSessionKey } from "@/lib/wallet";
 
 type Receipt = Awaited<ReturnType<typeof getReceipt>>;
 
@@ -68,12 +67,13 @@ function addressFromField(value: string): Address {
 export function ZkPaymentPanel({
   session,
   credential,
+  onResetSession,
 }: {
   session: { privateKey: Hex; address: Address } | null;
   credential: ZkCredential | null;
+  onResetSession: () => void;
 }) {
   const { fetch: anonFetch } = useAnonRpc();
-  const { reset } = useSessionKey();
 
   const paymaster = useMemo<Address | null>(() => {
     const value = credential?.paymaster ?? config.zkPaymaster;
@@ -476,7 +476,7 @@ export function ZkPaymentPanel({
           <Button variant="ghost" size="sm" onClick={() => void refreshState()}>
             <RefreshCw className="h-4 w-4" /> Refresh
           </Button>
-          <Button variant="ghost" size="sm" onClick={reset}>
+          <Button variant="ghost" size="sm" onClick={onResetSession}>
             New session key
           </Button>
         </div>
