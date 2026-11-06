@@ -107,6 +107,11 @@ function main() {
       "v4-periphery/src/lens/StateView.sol",
       "StateView",
     ),
+    V4PoolSeeder: pick(
+      output,
+      "v4-seeder/V4PoolSeeder.sol",
+      "V4PoolSeeder",
+    ),
   };
 
   fs.mkdirSync(OUT, { recursive: true });

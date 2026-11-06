@@ -34,5 +34,56 @@
   "poolManager": "0xd5eeb6c94f70436b8748148c517b7a07d033435b",
   "stateView": "0xd36bac46e06170d23476090e3eb17b5c0fa4f765",
   "daoSwapModuleFactory": "0x8f4c325af50a3d4ca7bee14bfe3d7cd597707f95",
-  "note": "No pools are seeded yet; run scripts/v4-seed.mjs after deploying a seeder."
+  "note": "No pools are seeded yet; run scripts/v4-seed.mjs after deploying a seeder.",
+  "demoPool": {
+    "token0": "0x200d918b12948b45dbbec71fa72c95e8a7b01d31",
+    "token1": "0xf92a95cec9cb99b0f21f845b47d4ec50e7fb8d10",
+    "key": {
+      "currency0": "0x200d918b12948b45dbbec71fa72c95e8a7b01d31",
+      "currency1": "0xf92a95cec9cb99b0f21f845b47d4ec50e7fb8d10",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "hooks": "0x0000000000000000000000000000000000000000"
+    },
+    "poolId": "0x8f630d614d3425c7035a21960dbe1157053e8d618e32d77c96b1a4ebc8b8281d",
+    "sqrtPriceX96": "79228162514264337593543950336",
+    "tick": "0",
+    "liquidity": "1000000000000000000000",
+    "seeder": "0x3b38ec8951075a540a07f8bb4450193036412993",
+    "seederRuntimeSize": 4202,
+    "swapModule": "0x8c572e202135438b0f4b0364b804b76d32d9adb2",
+    "swap": {
+      "zeroForOne": true,
+      "amountIn": "1000000000000000",
+      "minAmountOut": "1",
+      "amountOut": "996999005991991",
+      "txHash": "0x5ef980b65b6c39d456fb618fa29c8a6115c00019aad9331a3d770be3754f4367"
+    }
+  },
+  "smoke": {
+    "ranAt": "2026-11-06T17:40:09.875Z",
+    "swaps": [
+      {
+        "zeroForOne": true,
+        "amountIn": "1000000000000000",
+        "amountOut": "996997017979937",
+        "txHash": "0x353b3897edf3d9e1f422d8e96754c2273f6c93d0b850530bb5a61dd9f41bcd18"
+      },
+      {
+        "zeroForOne": false,
+        "amountIn": "1000000000000000",
+        "amountOut": "997002982026008",
+        "txHash": "0xad5b4f4ec25d55edba9bd9761c32dec688c97089d96264d4460d6e57f6372059"
+      }
+    ],
+    "slippage": "reverted: slippage",
+    "expired": "reverted: expired",
+    "slot0After": [
+      "79228083524101324270233219015",
+      "-1",
+      "0",
+      "3000"
+    ],
+    "liquidityAfter": "1000000000000000000000"
+  }
 }

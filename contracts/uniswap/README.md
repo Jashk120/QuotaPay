@@ -53,6 +53,27 @@ admin/timelock for anything beyond the demo.
 
 The script writes `deployments/v4-1337.json`.
 
+## Seed and smoke test
+
+`V4PoolSeeder` is a small one-shot seeder (initialize + full-range liquidity)
+that avoids deploying `PositionManager`/`Permit2` for the demo.
+
+```powershell
+node scripts/v4-seed.mjs        # tokens, pool, module, one swap
+node scripts/v4-swap-smoke.mjs  # both directions + slippage/deadline reverts
+```
+
+Current sidecar deployment (chain 1337):
+
+| Contract | Address |
+|---|---|
+| `PoolManager` | `0xd5eeb6c94f70436b8748148c517b7a07d033435b` |
+| `StateView` | `0xd36bac46e06170d23476090e3eb17b5c0fa4f765` |
+| `DaoSwapModuleFactory` | `0x8f4c325af50a3d4ca7bee14bfe3d7cd597707f95` |
+
+The seed/smoke addresses, pool id and swap results are recorded under
+`demoPool` / `smoke` in `deployments/v4-1337.json`.
+
 ## Licenses
 
 - `v4-core` is **BUSL-1.1** (see `v4-core/licenses/`). Review before any use
