@@ -2,7 +2,7 @@
 
 **Working title:** DAO Operator Agent
 **Status:** Draft v0.1, 2026-11-06
-**One line:** Run a DAO by chatting with an agent you don't have to trust.
+**One line:** An AI agent with real on-chain authority, where the worst case is bounded by the account, not the model.
 
 ---
 
@@ -300,9 +300,9 @@ Layers, each independent:
 4. **Account policy (`AgentAccount`).** Target and selector allowlist, checked at validation.
 5. **Onchain tiers and caps (`DaoCore`).** Admin signatures, rate limits, spend caps, allowlists.
 
-Layers 1 to 3 can be bypassed by a sufficiently clever injection. Layers 4 and 5 do not depend on the model.
+Layers 1 to 3 can be bypassed by a sufficiently clever injection. Layers 4 and 5 do not depend on the model, but layer 4 as implemented checks target and selector only — it does not bind arguments. A prompt injection that triggers an in-policy action (e.g. a whitelisted `pay()` to the wrong recipient within caps) is not stopped at validation; argument-level allowlists would have to live in `AgentAccount` storage, and the public-mempool rules restrict VERIFY to reading the sender's own storage.
 
-**What a compromised agent can still do:** spend up to the tier-1 caps, add invited members up to the rate limit, and acquire allowlisted assets up to their caps. The loss is bounded, not zero. State that plainly.
+**What a compromised agent can still do:** spend up to the tier-1 caps, add invited members up to the rate limit, and acquire allowlisted assets up to their caps. An injection's worst case is bounded by the caps, not by the model. The loss is bounded, not zero. State that plainly.
 
 ---
 
@@ -373,6 +373,6 @@ Layers 1 to 3 can be bypassed by a sufficiently clever injection. Layers 4 and 5
 **Not claimed:**
 
 - Not ready for a public network. The proof verification exceeds the proposed public validation allowance, and ERC-8421 is a Draft. The demo runs on the sidecar's alternative mempool.
-- The agent cannot misuse funds beyond its caps, but it can use them up to those caps.
+- The agent cannot exceed its mandate, but within the mandate it can still misuse funds up to the caps: an injection's worst case is bounded by the account, not the model.
 - Payout amounts, recipients and asset holdings are public.
 - Voting privacy is against chain observers, not against the operator.

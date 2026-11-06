@@ -37,11 +37,15 @@ separately.
   against the canonical transaction hash) whose resolved signer equals
   `agentSigner`;
 - only SENDER target/selector pairs present in its DAO-owned policy table
-  (when `frameEnforced` is true);
+  (when `frameEnforced` is true **and** the chain's client admits SENDER-frame
+  reads during validation — not yet demonstrated on the live devnet, which
+  deploys with `DAO_FRAME_ENFORCED=false`);
 - `EXECUTION` approval only. Payment is approved separately by the paymaster.
 
 `DaoCore` and `AssetModule` re-check every limit after execution, so a VERIFY
 bypass still hits caps, rate limits, allowlists and admin signatures.
+Out-of-policy targets, selectors and values are invalid at validation when
+`frameEnforced` is true; state-dependent caps revert at execution.
 
 ## Admin signature
 
