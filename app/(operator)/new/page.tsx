@@ -42,6 +42,57 @@ import { useConnectedWallet } from "@/lib/wallet";
 const DEFAULT_PROMPT =
   "Invite-only DAO, 5k USDC treasury, auto-approve spends up to $200.";
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/** Check both the new per-admin namespace and the legacy global mapping. */
+async function daoNameTaken(daoId: `0x${string}`, admin: `0x${string}`) {
+  const factory = config.daoFactoryAddress;
+  if (!factory) return false;
+  try {
+    const record = await publicClient.readContract({
+      address: factory,
+      abi: daoFactoryAbi,
+      functionName: "daoOf",
+      args: [admin, daoId],
+    });
+    return record[0] !== ZERO_ADDRESS;
+  } catch {
+    // Older factory without daoOf(admin, daoId).
+    try {
+      const record = await publicClient.readContract({
+        address: factory,
+        abi: daoFactoryAbi,
+        functionName: "daos",
+        args: [daoId],
+      });
+      return record[0] !== ZERO_ADDRESS;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * A factory rejects duplicate ids. Until the per-admin factory is deployed the
+ * id is globally unique, so pick "Name 2", "Name 3", … instead of surfacing a
+ * decoded `dao exists` revert.
+ */
+async function pickAvailableName(base: string, admin: `0x${string}`) {
+  const clean = base.trim() || "New Collective";
+  if (!(await daoNameTaken(daoIdFromName(clean), admin))) {
+    return { name: clean, original: clean, changed: false };
+  }
+  for (let i = 2; i <= 50; i += 1) {
+    const suffix = ` ${i}`;
+    const stem = clean.slice(0, Math.max(1, 31 - suffix.length));
+    const candidate = `${stem}${suffix}`;
+    if (!(await daoNameTaken(daoIdFromName(candidate), admin))) {
+      return { name: candidate, original: clean, changed: true };
+    }
+  }
+  throw new Error("Could not find an available DAO name. Try a different name.");
+}
+
 export default function NewDaoPage() {
   const router = useRouter();
   const { address, isConnected, connect } = useConnectedWallet();
@@ -60,6 +111,7 @@ export default function NewDaoPage() {
   const [configSource, setConfigSource] = useState<string | null>(null);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [fundedTreasury, setFundedTreasury] = useState<string | null>(null);
   const [fundingNote, setFundingNote] = useState<string | null>(null);
@@ -113,6 +165,7 @@ export default function NewDaoPage() {
 
   async function deploy() {
     setError(null);
+    setNotice(null);
     setCreated(null);
     setFundedTreasury(null);
     setFundingNote(null);
@@ -135,7 +188,15 @@ export default function NewDaoPage() {
         throw new Error(signerJson.error ?? "agent signer unavailable");
       }
 
-      const daoId = daoIdFromName(name);
+      // Never send a transaction we know will revert with "dao exists".
+      const picked = await pickAvailableName(name, address as `0x${string}`);
+      if (picked.changed) {
+        setName(picked.name);
+        setNotice(
+          `A DAO named “${picked.original}” already exists. Deploying as “${picked.name}”.`,
+        );
+      }
+      const daoId = daoIdFromName(picked.name);
       const fundingWei = parseEther(funding || "0");
       const tokenCaps =
         config.usdcAddress && isAddressLike(config.usdcAddress)
@@ -176,12 +237,21 @@ export default function NewDaoPage() {
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") {
+        throw new Error(
+          `Deployment reverted on-chain (${hash}). The name may already be taken, or the factory rejected the config.`,
+        );
+      }
       const createdEvent = parseEventLogs({
         abi: daoFactoryAbi,
         eventName: "DaoCreated",
         logs: receipt.logs,
       })[0]?.args;
-      if (!createdEvent) throw new Error("DaoCreated event not found");
+      if (!createdEvent) {
+        throw new Error(
+          `DaoCreated event not found in ${hash}. The transaction may have reverted without an event.`,
+        );
+      }
       setCreated(createdEvent.daoCore);
       if (config.daoGasPaymaster) {
         try {
@@ -348,7 +418,10 @@ export default function NewDaoPage() {
               <Input
                 id="dao-name"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setNotice(null);
+                }}
               />
             </Field>
             <Field label="Treasury target (USDC)" htmlFor="dao-treasury">
@@ -421,6 +494,12 @@ export default function NewDaoPage() {
             <Row label="Admin" value={address ?? "not connected"} mono />
             <Row label="Frame enforcement" value="false (devnet)" />
           </div>
+
+          {notice ? (
+            <Alert variant="warning" title="Name adjusted">
+              {notice}
+            </Alert>
+          ) : null}
 
           <Button
             className="w-full"
