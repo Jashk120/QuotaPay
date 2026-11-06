@@ -24,6 +24,8 @@ export function PlanCard({
   onRequestSignature,
   onOpenProposal,
   onDismiss,
+  canExecute,
+  adminAddress,
 }: {
   plan: Plan;
   busy: boolean;
@@ -31,6 +33,8 @@ export function PlanCard({
   onRequestSignature: (plan: Plan) => void;
   onOpenProposal: (plan: Plan) => void;
   onDismiss: (plan: Plan) => void;
+  canExecute: boolean;
+  adminAddress?: string;
 }) {
   const blocking =
     plan.authorization === "agent"
@@ -189,14 +193,29 @@ export function PlanCard({
             </Button>
           ) : plan.authorization === "admin" ||
             plan.authorization === "admin-only" ? (
-            <Button size="sm" onClick={() => onRequestSignature(plan)}>
-              <ShieldCheck className="h-4 w-4" /> Request admin signature
+            <Button
+              size="sm"
+              onClick={() => onRequestSignature(plan)}
+              disabled={!canExecute}
+              title={
+                canExecute
+                  ? undefined
+                  : `Connect the DAO admin${adminAddress ? ` (${adminAddress})` : ""} to sign`
+              }
+            >
+              <ShieldCheck className="h-4 w-4" />{" "}
+              {canExecute ? "Request admin signature" : "Admin wallet required"}
             </Button>
           ) : (
             <Button
               size="sm"
               onClick={() => onExecute(plan)}
-              disabled={busy || blocking.length > 0}
+              disabled={!canExecute || busy || blocking.length > 0}
+              title={
+                canExecute
+                  ? undefined
+                  : `Connect the DAO admin${adminAddress ? ` (${adminAddress})` : ""} to execute`
+              }
               data-testid="dao-execute"
             >
               {busy ? (
@@ -204,7 +223,7 @@ export function PlanCard({
               ) : (
                 <Play className="h-4 w-4" />
               )}
-              Approve &amp; execute
+              {canExecute ? "Approve & execute" : "Admin wallet required"}
             </Button>
           )}
           {plan.status !== "executed" && !needsNoTx ? (

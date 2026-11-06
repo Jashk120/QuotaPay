@@ -110,6 +110,10 @@ export default function DaoConsolePage() {
 
   const slug = daoSlug(state.config.name);
   const activeMembers = state.members.filter((member) => member.active);
+  const isAdmin =
+    Boolean(walletAddress) &&
+    Boolean(state.config.adminAddress) &&
+    walletAddress!.toLowerCase() === state.config.adminAddress.toLowerCase();
 
   async function sendPrompt(text: string) {
     const prompt = text.trim();
@@ -536,6 +540,37 @@ export default function DaoConsolePage() {
         )}
       </Alert>
 
+      {state.config.adminAddress ? (
+        walletAddress ? (
+          isAdmin ? (
+            <Alert variant="success" title="You are the DAO admin">
+              This wallet can authorize tier-2 actions for {state.config.name}.
+            </Alert>
+          ) : (
+            <Alert
+              variant="warning"
+              title="This DAO does not belong to your wallet"
+            >
+              The admin is{" "}
+              <span className="font-mono">{state.config.adminAddress}</span>.
+              You are connected as{" "}
+              <span className="font-mono">{walletAddress}</span>. You can read
+              everything, but only the admin can authorize executions.{" "}
+              <Link href="/new" className="underline">
+                Create your own DAO
+              </Link>{" "}
+              to execute actions.
+            </Alert>
+          )
+        ) : (
+          <Alert variant="info" title="Read-only until the admin connects">
+            The DAO admin is{" "}
+            <span className="font-mono">{state.config.adminAddress}</span>.
+            Connect that wallet to execute. Any other wallet can only read.
+          </Alert>
+        )
+      ) : null}
+
       {chainError ? (
         <Alert variant="warning" title="Chain read warning">
           {chainError}
@@ -578,6 +613,8 @@ export default function DaoConsolePage() {
           onSend={sendPrompt}
           onExecute={executePlan}
           onRequestSignature={requestSignature}
+          canExecute={isAdmin}
+          adminAddress={state.config.adminAddress}
           onOpenProposal={() =>
             setChainMessage(
               "Governance actions need a concrete on-chain proposal target; the console does not encode arbitrary proposal calldata yet.",

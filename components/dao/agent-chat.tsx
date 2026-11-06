@@ -37,6 +37,8 @@ export function AgentChat({
   onRequestSignature,
   onOpenProposal,
   onDismiss,
+  canExecute,
+  adminAddress,
 }: {
   items: ChatItem[];
   plans: Record<string, Plan>;
@@ -46,6 +48,8 @@ export function AgentChat({
   onRequestSignature: (plan: Plan) => void;
   onOpenProposal: (plan: Plan) => void;
   onDismiss: (plan: Plan) => void;
+  canExecute: boolean;
+  adminAddress?: string;
 }) {
   const [value, setValue] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -161,6 +165,8 @@ export function AgentChat({
                   onRequestSignature={onRequestSignature}
                   onOpenProposal={onOpenProposal}
                   onDismiss={onDismiss}
+                  canExecute={canExecute}
+                  adminAddress={adminAddress}
                 />
               </div>
             );

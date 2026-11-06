@@ -14,6 +14,7 @@ import {
   keccak256,
   parseEther,
   parseEventLogs,
+  parseUnits,
   stringToHex,
 } from "viem";
 import { useWriteContract } from "wagmi";
@@ -44,7 +45,7 @@ export default function NewDaoPage() {
 
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [name, setName] = useState("New Collective");
-  const [treasury, setTreasury] = useState("0");
+  const [funding, setFunding] = useState("0.05");
   const [perTx, setPerTx] = useState("200");
   const [perPeriod, setPerPeriod] = useState("1000");
   const [rateLimit, setRateLimit] = useState("10");
@@ -76,7 +77,6 @@ export default function NewDaoPage() {
         };
       };
       setName(json.config.name);
-      setTreasury(String(json.config.treasuryUsdc));
       setPerTx(String(json.config.perTxCap));
       setPerPeriod(String(json.config.perPeriodCap));
       setRateLimit(String(json.config.addMemberRateLimit));
@@ -85,7 +85,6 @@ export default function NewDaoPage() {
       const { parseDaoConfig } = await import("@/lib/dao/config");
       const cfg = parseDaoConfig(prompt);
       setName(cfg.name);
-      setTreasury(String(cfg.treasuryUsdc));
       setPerTx(String(cfg.perTxCap));
       setPerPeriod(String(cfg.perPeriodCap));
       setRateLimit(String(cfg.addMemberRateLimit));
@@ -119,14 +118,14 @@ export default function NewDaoPage() {
 
       const slug = daoSlug(name);
       const daoId = keccak256(stringToHex(slug));
-      const treasuryWei = parseEther(treasury || "0");
+      const fundingWei = parseEther(funding || "0");
       const tokenCaps =
         config.usdcAddress && isAddressLike(config.usdcAddress)
           ? [
               {
                 token: config.usdcAddress,
-                perTx: parseEther(perTx || "0"),
-                perPeriod: parseEther(perPeriod || "0"),
+                perTx: parseUnits(perTx || "0", config.usdcDecimals),
+                perPeriod: parseUnits(perPeriod || "0", config.usdcDecimals),
                 periodLength: 2_592_000n,
               },
             ]
@@ -151,7 +150,11 @@ export default function NewDaoPage() {
           tokenCaps,
           [],
         ],
-        value: treasuryWei,
+        value: fundingWei,
+        // createDao deploys three contracts; the devnet estimate is ~54.7M.
+        // Set the limit explicitly so MetaMask does not fail its fee estimate.
+        gas: 56_000_000n,
+        gasPrice: 2_000_000_000n,
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -248,11 +251,11 @@ export default function NewDaoPage() {
                 onChange={(event) => setName(event.target.value)}
               />
             </Field>
-            <Field label="Treasury (USDC)" htmlFor="dao-treasury">
+            <Field label="Native funding (ETH)" htmlFor="dao-funding">
               <Input
-                id="dao-treasury"
-                value={treasury}
-                onChange={(event) => setTreasury(event.target.value)}
+                id="dao-funding"
+                value={funding}
+                onChange={(event) => setFunding(event.target.value)}
               />
             </Field>
             <Field label="Per-tx cap (USDC)" htmlFor="dao-pertx">
@@ -284,6 +287,12 @@ export default function NewDaoPage() {
               />
             </Field>
           </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            Native funding is sent with{" "}
+            <span className="font-mono">createDao</span>. The USDC treasury is
+            funded afterwards by transferring USDC to the new DaoCore address.
+          </p>
 
           <div className="grid gap-2 rounded-xl border border-border/70 bg-white/60 p-3 text-sm">
             <Row label="Factory" value={factory || "not configured"} mono />
