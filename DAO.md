@@ -89,9 +89,19 @@ unique and replay-safe; removal still requires an admin signature and updates
 the root. Root history is kept in `knownRoot`, and every proposal stores the
 snapshot root used for its vote.
 
-This means the spec's residual risk applies: a compromised agent can add
-members up to the rate limit (spec §11). It cannot remove a member, dispose of
-an asset or change the policy without a tier-2/3 authorization.
+**This is a demo shortcut, not the spec's final tree.** The contract checks
+commitment uniqueness, the add rate limit and the admin signature on removal,
+but it cannot verify that a supplied root contains only the listed
+commitments. A compromised agent could therefore inflate the voter set in a
+single root update. The production fix is an onchain Poseidon incremental tree
+(or a proof that the new root is the correct update from the old one); that
+logic belongs in a separate membership module so `DaoCoreFactory` stays under
+the EIP-170 size limit. The admin can pause the agent when a `MembershipRootUpdated`
+event looks wrong, but the root itself is not trustless in this build.
+
+Apart from root integrity, the spec's residual risk applies: a compromised
+agent can still add members up to the rate limit. It cannot remove a member,
+dispose of an asset or change the policy without a tier-2/3 authorization.
 
 ## ZK vote flow
 
@@ -159,7 +169,8 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
 - EIP-8141 / ERC-8421 are drafts; the contracts are not audited.
 - The vote path needs the 500k staked validation budget (the Groth16 verifier is
   ~258k gas). The agent action path fits the public 100k budget.
-- The Poseidon root is agent-supplied (see "Membership root").
+- The Poseidon root is agent-supplied and not verified against the commitment
+  journal (see "Membership root"). This is the largest remaining trust gap.
 - `promptHash`/`planHash` are recorded on spends, proposals and their execution.
   Membership and asset actions carry zero hashes; the off-chain feed can label
   them from the plan store, but the on-chain event is not complete for those
