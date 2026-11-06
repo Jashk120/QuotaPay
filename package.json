@@ -22,10 +22,13 @@
     "v4:probe": "node scripts/v4-probe.mjs",
     "test": "node --test \"test/*.test.mjs\"",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "agent:migrate": "node scripts/agent-migrate.mjs",
+    "agent:worker": "node worker/agent-worker.mjs"
   },
   "dependencies": {
     "@anon-rpc/browser-harness": "^0.4.0",
+    "@neondatabase/serverless": "^1.2.0",
     "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-slot": "^1.1.1",
     "@rainbow-me/rainbowkit": "^2.2.11",

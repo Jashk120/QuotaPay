@@ -89,26 +89,45 @@ export default function DaoConsolePage() {
   async function sendPrompt(text: string) {
     const prompt = text.trim();
     if (!prompt) return;
-    // Prefer the server LLM (OpenAI / OpenRouter / OpenAI-compatible custom
-    // gateway for cheap Chinese models). Falls back to the deterministic
-    // local parser when no key is set or the model fails.
+    // Cloud path: enqueue to Neon via /api/dao/intents (persists even if the
+    // tab closes; the VPS worker completes it). The API also returns an
+    // inline reply so the UI stays instant with no worker running.
+    // Falls back to the local deterministic parser offline.
     let reply;
+    let intentId: string | null = null;
     try {
-      const res = await fetch("/api/dao/agent", {
+      const res = await fetch("/api/dao/intents", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ prompt, state }),
       });
-      if (!res.ok) throw new Error(`agent API ${res.status}`);
+      if (!res.ok) throw new Error(`intents API ${res.status}`);
       const json = (await res.json()) as {
+        id: string | null;
         reply: ReturnType<typeof parsePrompt>;
         source?: string;
       };
       reply = json.reply;
+      intentId = json.id;
       setLlmSource(json.source ?? null);
     } catch {
-      reply = parsePrompt(prompt, state);
-      setLlmSource("local");
+      try {
+        const res = await fetch("/api/dao/agent", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ prompt, state }),
+        });
+        if (!res.ok) throw new Error(`agent API ${res.status}`);
+        const json = (await res.json()) as {
+          reply: ReturnType<typeof parsePrompt>;
+          source?: string;
+        };
+        reply = json.reply;
+        setLlmSource(json.source ?? null);
+      } catch {
+        reply = parsePrompt(prompt, state);
+        setLlmSource("local");
+      }
     }
     const userItem: ChatItem = {
       id: rid("msg"),
@@ -144,6 +163,30 @@ export default function DaoConsolePage() {
       setTab("assets");
     } else if (plan.action === "update_policy" || plan.action === "pause") {
       setTab("policy");
+    }
+
+    // If a worker is running on the VPS it will mark the intent done even
+    // after this tab closes. Poll briefly to reflect its verdict in the badge.
+    if (intentId) {
+      const id = intentId;
+      void (async () => {
+        for (let i = 0; i < 10; i++) {
+          await new Promise((r) => setTimeout(r, 1500));
+          try {
+            const r = await fetch(`/api/dao/intents/${id}`);
+            if (!r.ok) return;
+            const j = (await r.json()) as {
+              intent?: { status?: string; source?: string } | null;
+            };
+            if (j.intent?.status === "done" || j.intent?.status === "failed") {
+              if (j.intent.source) setLlmSource(j.intent.source);
+              return;
+            }
+          } catch {
+            return;
+          }
+        }
+      })();
     }
   }
 
@@ -312,6 +355,11 @@ export default function DaoConsolePage() {
             <Badge variant="outline" title="Intent parser in use">
               {llmSource?.startsWith("llm:") ? llmSource : "parser: local"}
             </Badge>
+            {process.env.NEXT_PUBLIC_AGENT_TEST_MODE === "true" ? (
+              <Badge variant="warning" title="No wallet signature required">
+                test mode: no auth
+              </Badge>
+            ) : null}
             <TierBadge tier={1} />
           </div>
           <h1 className="text-3xl font-semibold tracking-tight">
