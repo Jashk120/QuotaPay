@@ -2,14 +2,25 @@
 
 Status: design + runbook. The Phase 0 probe, `DaoSwapModule`, its factory, and
 the `DaoCore`/`DaoFactory` wiring are implemented and covered by `t24` on
-ganache. The devnet deployment phases (v4 build, pool seeding, frame swap) are
-not implemented yet. `DAO.md` remains the source of truth for the existing DAO
+ganache; the probe also passes on the devnet (`TSTORE`/`TLOAD`, `MCOPY`). The
+devnet deployment phases (v4 build, pool seeding, frame swap) are not
+implemented yet. `DAO.md` remains the source of truth for the existing DAO
 contracts; this file is the plan for adding v4.
 
 Target chain: the EIP-8141 / ethrex devnet (chain id 1337), with v4 deployed
 from source. The Uniswap API is out of scope there: chain 1337 is not in its
 supported-chain list, and a self-deployed PoolManager would not be indexed by
 it anyway.
+
+**Devnet verdict: self-deployed v4 is viable.** The Phase 0 probe passed on
+2026-11-06 against `ethrex/v23.0.0-eip8141-tracer`: chain id 1337, `TSTORE`/
+`TLOAD` and `MCOPY` all work (probe at `0xf6e14ada...e20535`), and the block gas
+limit is 60,000,000. The chain is Prague-era (`blobGasUsed`,
+`parentBeaconBlockRoot`, `requestsHash`), so EIP-1153 is present. `PoolManager`
+is 24,009 bytes and fits the 24,576-byte limit. The remaining checks are the v4
+build size and one swap inside a SENDER frame. If those pass, the deployment
+phases are unblocked. If they fail, fall back to a simple constant-product mock
+pool for the demo.
 
 ---
 
@@ -426,6 +437,36 @@ not start the next phase until the gate passes.
 
 ### Phase 0 - chain probe (do this first)
 
+Self-hosted sidecar (2026-11-06): `https://sidecar.161.118.164.226.nip.io/rpc`
+(`ghcr.io/jashk120/mempool-workshop-sidecar:latest`, `BUNDLING_MODE=manual`).
+The stock `deploy/altmempool` compose serves only the bundler methods until
+`--redirectRpc` is added to the sidecar command; without it every `eth_*` read
+(`eth_estimateGas`, `eth_getBlockByNumber`, ...) returns `-32601 Method ... is
+not supported`. The compose on the VPS has the flag. The VPS is arm64 while
+the image is amd64-only, so the service runs under QEMU (`platform:
+linux/amd64`); allow ~1 min for boot.
+
+Frame probe through the self-hosted node returns the same negative result as
+the public endpoint (`Frame transaction validation prefix does not match any
+recognized shape`), so deploys must use `DAO_FRAME_ENFORCED=false`. The two
+endpoints agree, which is the parity check for the relay.
+
+Observed on 2026-11-06 against the devnet RPC:
+
+| Field | Value |
+|---|---|
+| `eth_chainId` | `0x539` (1337) |
+| `web3_clientVersion` | `ethrex/v23.0.0-eip8141-tracer-...` (the `/rpc` path is proxied through skandha) |
+| Latest block | `blobGasUsed`, `excessBlobGas`, `parentBeaconBlockRoot` (Cancun) and `requestsHash` (Prague) are present |
+| Block gas limit | `0x3938700` = 60,000,000 |
+| Probe result | `tstore: true`, `mcopy: true`, `chainIdMatches: true` |
+
+Probe run on 2026-11-06: deployed at
+`0xf6e14adad3dbc1dd96bef3d7c6c5dfffa3e20535`, block 5101. The Cancun/Prague
+header fields plus the direct probe confirm EIP-1153 (`TSTORE`/`TLOAD`) and
+`MCOPY`. The contract-size and frame-tx checks still have to pass in Phases 1
+and 5.
+
 Probe the same way the repo already probes `FRAMEDATACOPY`:
 
 | Check | Why |
@@ -571,7 +612,8 @@ writes several slots). Confirm:
 
 - `tokenCaps[USDC].spent` increases by `amountIn`;
 - the RWA balance of DaoCore increases;
-- the `Swapped` and `ActionExecuted(ACTION_SWAP)` events are present;
+- the `Spent` and `Swapped` events are present (`ACTION_SWAP` is emitted only
+  on the tier-3 path, through `recordSwap`);
 - replaying the same frame with the same nonce fails.
 
 Then force the swap to fail (bad `minAmountOut`) and confirm the preceding
