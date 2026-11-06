@@ -44,8 +44,14 @@ so without it a proof could be replayed under a different `tx.sender`.
 | `scripts/zk-bench.mjs` | Deploy verifier on ganache, measure `verifyProof` gas |
 | `scripts/deploy-zk.mjs` | Deploy verifier + paymaster, build demo root, stake, fund |
 | `scripts/zk-sponsor.mjs` | Prove + build/sign/submit the sponsored frame tx |
+| `scripts/zk-publish.mjs` | Copy wasm/zkey to `public/zk`, write the demo credential |
+| `lib/zk/client.ts` | Browser witness/nullifier/prover helpers (`poseidon-lite` + `snarkjs`) |
+| `app/zk/page.tsx` | Parallel `/zk` payment page (blind-token `/pay` untouched) |
+| `components/zk-credential-form.tsx` | Paste/load credential JSON, show bound nullifiers |
+| `components/zk-payment-panel.tsx` | Prove → build → sign → submit, with live root/epoch checks |
 | `test/t12-zk-verifier.test.mjs` | Fixture proof verifies; tampering fails; gas guard |
 | `test/t13-zk-paymaster.test.mjs` | Config, custody, entrypoint gates |
+| `test/t14-zk-client.test.mjs` | Browser witness/nullifier matches the circuit proof |
 
 ## Gas: why the staked cap is 500k
 
@@ -86,6 +92,32 @@ npm run zk:bench     # deploy verifier on ganache, print estimate/gasUsed
 npm test             # T12 asserts the fixture verifies and gas < 305k
 ```
 
+## Browser flow (`/zk`)
+
+```powershell
+npm run zk:setup      # circuit + devnet zkey + verifier
+npm run zk:deploy     # verifier + ZkPaymaster, root, stake, fund
+npm run zk:publish    # wasm/zkey -> public/zk + demo credential
+npm run dev
+```
+
+Open `/zk`. The page:
+
+1. shows the session key that will be bound into the proof;
+2. loads a credential JSON (or the gitignored demo credential) into
+   localStorage;
+3. computes `identityNullifier` / `sessionNullifier` with `poseidon-lite` in
+   the tab;
+4. generates the Groth16 proof in the tab with `snarkjs` (wasm + zkey from
+   `public/zk`);
+5. checks the proof's public signals against the credential, builds the
+   4-frame tx with a 330k charge-frame budget, signs with the session key, and
+   submits.
+
+`public/zk/` is gitignored: it contains a 2.2 MB wasm, a 5.4 MB zkey, and the
+demo secret. A fresh clone must run `zk:setup` + `zk:publish` before `/zk` can
+prove. The CLI equivalent is `npm run zk:sponsor`.
+
 ## Nullifier model
 
 One sponsored transaction per credential per epoch:
@@ -119,8 +151,9 @@ grant cross-instance access.
 
 ## Limitations / next steps
 
-- UI is not wired yet. `/pay` still uses the blind-token `charge(Token)` path;
-  the CLI path is `npm run zk:deploy` then `npm run zk:sponsor`.
+- The parallel `/zk` page is wired (browser prover + submit). `/pay` still uses
+  the blind-token `charge(Token)` path until the ZK flow is validated on the
+  devnet. The CLI path is `npm run zk:deploy` then `npm run zk:sponsor`.
 - One payment per epoch. Multiple payments need a sequential counter or a
   different credential design.
 - `TXPARAM.MAX_COST` is an ethrex extension (`0x06`). On a chain without it,
