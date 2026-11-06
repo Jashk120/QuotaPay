@@ -46,13 +46,13 @@ export function clearDao() {
   }
 }
 
-export function broadcastDao() {
+export function broadcastDao(source?: string) {
   if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") {
     return;
   }
   try {
     const channel = new BroadcastChannel(DAO_CHANNEL);
-    channel.postMessage({ type: "state-changed" });
+    channel.postMessage({ type: "state-changed", source });
     channel.close();
   } catch {
     /* ignore */
