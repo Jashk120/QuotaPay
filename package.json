@@ -24,6 +24,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "agent:migrate": "node scripts/agent-migrate.mjs",
+    "agent:smoke": "node scripts/agent-smoke.mjs",
     "agent:worker": "node worker/agent-worker.mjs"
   },
   "dependencies": {

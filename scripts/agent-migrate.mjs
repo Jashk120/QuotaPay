@@ -10,5 +10,7 @@ if (!url) {
 }
 const sql = neon(url);
 const schema = fs.readFileSync("db/agent-schema.sql", "utf8");
-await sql(schema);
+for (const stmt of schema.split(";").map((s) => s.trim()).filter(Boolean)) {
+  await sql.query(stmt);
+}
 console.log("agent schema applied");
