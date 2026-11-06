@@ -50,6 +50,21 @@ test("T13 ZkPaymaster config, custody, and gates", async (t) => {
     ["0x0", "0x0"],
   ];
 
+  await t.test("plain ETH funding is accepted", async () => {
+    const before = await chain.nativeBalance(pmAddress);
+    await (
+      await admin.sendTransaction({
+        to: pmAddress,
+        value: ethers.parseEther("0.25"),
+      })
+    ).wait();
+    assert.equal(
+      await chain.nativeBalance(pmAddress),
+      before + ethers.parseEther("0.25"),
+      "a value-bearing empty call must top up the tank"
+    );
+  });
+
   await t.test("charge is entrypoint-gated", async () => {
     await expectRevert(
       () =>

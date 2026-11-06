@@ -192,6 +192,8 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
 
         address sessionKey = address(uint160(txparam(TxParam.SENDER)));
         uint256 maxCost = txparam(TxParam.MAX_COST);
+        // Fail closed on a chain without the ethrex MAX_COST extension.
+        require(maxCost > 0, "maxCost=0");
         require(maxCost <= maxSponsorCost, "max cost");
         require(
             address(this).balance >= maxCost + pendingWithdrawals,
@@ -226,8 +228,15 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         emit Charged(sigHash, voteNullifier);
     }
 
-    /// Pay frame (empty calldata): approve only after this tx's charge.
+    /// Empty calldata is overloaded:
+    ///   - a value-bearing transfer is a treasury top-up (e.g. after a v4 swap);
+    ///   - the entrypoint's pay frame is value-free and approves payment.
+    /// Do not add `receive()`: it would swallow the pay frame.
     fallback() external payable {
+        if (msg.value > 0 && msg.sender != address(0xaa)) {
+            emit Deposited(msg.sender, msg.value);
+            return;
+        }
         require(msg.sender == address(0xaa), "not entrypoint");
         require(chargedTx[bytes32(txparam(TxParam.SIG_HASH))], "not charged");
         approve(Scope.PAYMENT);

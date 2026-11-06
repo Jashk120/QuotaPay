@@ -190,6 +190,10 @@ contract ZkPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         // maximum cost. Without this, a valid credential can make the paymaster
         // escrow/pay far more than maxSponsorCost.
         uint256 maxCost = txparam(TxParam.MAX_COST);
+        // Fail closed on a chain without the ethrex MAX_COST extension. A zero
+        // bound would otherwise pass `maxCost <= maxSponsorCost` and let the
+        // sponsor be charged up to its whole balance.
+        require(maxCost > 0, "maxCost=0");
         require(maxCost <= maxSponsorCost, "max cost");
         require(
             address(this).balance >= maxCost + pendingWithdrawals,
@@ -221,8 +225,15 @@ contract ZkPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         emit Charged(sigHash, identityNullifier);
     }
 
-    /// Pay frame (empty calldata): approve only after this tx's charge.
+    /// Empty calldata is overloaded:
+    ///   - a value-bearing transfer is a treasury top-up (e.g. after a v4 swap);
+    ///   - the entrypoint's pay frame is value-free and approves payment.
+    /// Do not add `receive()`: it would swallow the pay frame.
     fallback() external payable {
+        if (msg.value > 0 && msg.sender != address(0xaa)) {
+            emit Deposited(msg.sender, msg.value);
+            return;
+        }
         require(msg.sender == address(0xaa), "not entrypoint");
         require(chargedTx[bytes32(txparam(TxParam.SIG_HASH))], "not charged");
         approve(Scope.PAYMENT);

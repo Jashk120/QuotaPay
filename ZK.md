@@ -355,9 +355,13 @@ grant cross-instance access.
   blind-token path. The CLI path is `npm run zk:deploy` then `npm run zk:sponsor`.
 - One payment per epoch. Multiple payments need a sequential counter or a
   different credential design.
-- `TXPARAM.MAX_COST` is an ethrex extension (`0x06`). On a chain without it,
-  `charge()` must compute the bound from frame gas limits and `MAX_FEE`
-  instead; otherwise the `maxSponsorCost` check is bypassed.
+- `TXPARAM.MAX_COST` is an ethrex extension (`0x06`). `charge()` now fails
+  closed (`maxCost=0`) if the extension returns zero, so a chain without it
+  cannot silently bypass the sponsor cap. A chain-specific build can compute
+  the bound from frame gas limits and `MAX_FEE` instead.
+- Paymaster gas tanks are topped up with a value-bearing empty call. Do not add
+  `receive()` to either paymaster: the entrypoint's value-free empty call is the
+  pay frame and must keep reaching the fallback.
 - The verifier call is external, so the paymaster pays a cold `CALL` (~2.6k)
   on top of the verifier gas (~256k Membership, ~272k DAO). This is included
   in the 330k frame budget.

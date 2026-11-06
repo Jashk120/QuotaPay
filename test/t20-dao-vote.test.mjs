@@ -171,6 +171,19 @@ test("T20 DAO vote circuit, verifier and paymaster", async (t) => {
     assert.equal(await paymaster.maxSponsorCost(), 1000n);
     assert.equal(await paymaster.voteConsumed(treasuryAddr, 7n, 42n), false);
 
+    const beforeFunding = await chain.nativeBalance(paymasterAddr);
+    await (
+      await admin.sendTransaction({
+        to: paymasterAddr,
+        value: ethers.parseEther("0.25"),
+      })
+    ).wait();
+    assert.equal(
+      await chain.nativeBalance(paymasterAddr),
+      beforeFunding + ethers.parseEther("0.25"),
+      "a value-bearing empty call must top up the vote tank"
+    );
+
     const zero2 = ["0x0", "0x0"];
     const zero22 = [
       ["0x0", "0x0"],

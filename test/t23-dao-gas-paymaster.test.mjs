@@ -47,6 +47,21 @@ test("T23 DaoGasPaymaster: config, custody and gates", async (t) => {
     );
   });
 
+  await t.test("plain ETH funding is accepted", async () => {
+    const before = await chain.nativeBalance(paymasterAddr);
+    await (
+      await admin.sendTransaction({
+        to: paymasterAddr,
+        value: ethers.parseEther("0.25"),
+      })
+    ).wait();
+    assert.equal(
+      await chain.nativeBalance(paymasterAddr),
+      before + ethers.parseEther("0.25"),
+      "a value-bearing empty call must top up the tank"
+    );
+  });
+
   await t.test("charge is entrypoint-gated", async () => {
     await expectRevert(
       () => paymaster.connect(outsider).charge.staticCall(),
