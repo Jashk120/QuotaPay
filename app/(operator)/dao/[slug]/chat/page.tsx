@@ -33,7 +33,7 @@ import { ProposalsPanel } from "@/components/dao/proposals-panel";
 import { TierBadge } from "@/components/dao/tier-badge";
 import { TransactionFeed } from "@/components/dao/transaction-feed";
 import { TreasuryPanel } from "@/components/dao/treasury-panel";
-import { config, isDaoChainConfigured } from "@/lib/config";
+import { config } from "@/lib/config";
 import { devnet, publicClient } from "@/lib/contracts";
 import { parsePrompt } from "@/lib/dao/agent.mjs";
 import { daoCoreAbi, sharedDaoGasPaymasterAbi } from "@/lib/daoAbis.mjs";
@@ -53,7 +53,10 @@ import { useConnectedWallet } from "@/lib/wallet";
 import type {
   ActionType,
   ChatItem,
+  DaoConversation,
+  DaoMessage,
   Plan,
+  Refusal,
 } from "@/lib/dao/types";
 import { cn } from "@/lib/utils";
 
@@ -97,8 +100,9 @@ export default function DaoConsolePage() {
     : null;
   const core = isAddress(param) ? param : envId === param ? envCore : null;
 
+  const isChainDao = Boolean(core);
   const { state, ready, source, chainError, refreshing, refresh } = useDaoState({
-    coreAddress: core ?? undefined,
+    coreAddress: core ?? "",
     name:
       core && envCore && core.toLowerCase() === envCore.toLowerCase()
         ? config.daoName
@@ -132,6 +136,128 @@ export default function DaoConsolePage() {
   const [sponsorship, setSponsorship] = useState<
     "unknown" | "allowed" | "missing"
   >("unknown");
+
+  const [conversations, setConversations] = useState<DaoConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | null
+  >(null);
+  const [conversationLoading, setConversationLoading] = useState(false);
+
+  useEffect(() => {
+    if (!state.config.coreAddress) return;
+    let cancelled = false;
+    (async () => {
+      const res = await fetch(
+        `/api/dao/conversations?dao=${state.config.coreAddress}`,
+      );
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        conversations?: DaoConversation[];
+      };
+      let rows = json.conversations ?? [];
+      if (rows.length === 0) {
+        const created = await fetch("/api/dao/conversations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ dao: state.config.coreAddress }),
+        });
+        if (created.ok) {
+          const createdJson = (await created.json()) as {
+            conversation?: DaoConversation;
+          };
+          if (createdJson.conversation) rows = [createdJson.conversation];
+        }
+      }
+      if (cancelled) return;
+      setConversations(rows);
+      setActiveConversationId((current) => current ?? rows[0]?.id ?? null);
+    })().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [state.config.coreAddress]);
+
+  useEffect(() => {
+    if (!activeConversationId) {
+      setItems([]);
+      setPlans({});
+      return;
+    }
+    let cancelled = false;
+    setConversationLoading(true);
+    fetch(`/api/dao/conversations/${activeConversationId}/messages`)
+      .then((res) => res.json())
+      .then((json: { messages?: DaoMessage[] }) => {
+        if (cancelled) return;
+        const nextItems: ChatItem[] = [];
+        const nextPlans: Record<string, Plan> = {};
+        for (const message of json.messages ?? []) {
+          const at = new Date(message.createdAt).getTime();
+          if (message.role === "user") {
+            nextItems.push({
+              id: message.id,
+              role: "user",
+              text: String(message.payload.text ?? ""),
+              at,
+            });
+          } else if (message.payload.plan) {
+            const plan = message.payload.plan as Plan;
+            nextPlans[plan.id] = plan;
+            nextItems.push({
+              id: message.id,
+              role: "agent",
+              planId: plan.id,
+              at,
+            });
+          } else if (message.payload.refusal) {
+            nextItems.push({
+              id: message.id,
+              role: "agent",
+              refusal: message.payload.refusal as Refusal,
+              at,
+            });
+          }
+        }
+        setItems(nextItems);
+        setPlans(nextPlans);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setConversationLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeConversationId]);
+
+  async function persistMessage(
+    role: "user" | "agent",
+    payload: Record<string, unknown>,
+  ) {
+    if (!activeConversationId) return;
+    await fetch(`/api/dao/conversations/${activeConversationId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role, payload }),
+    }).catch(() => {});
+  }
+
+  async function newChat() {
+    if (!state.config.coreAddress) return;
+    const res = await fetch("/api/dao/conversations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dao: state.config.coreAddress }),
+    });
+    if (!res.ok) return;
+    const json = (await res.json()) as { conversation?: DaoConversation };
+    if (!json.conversation) return;
+    setConversations((previous) => [json.conversation!, ...previous]);
+    setActiveConversationId(json.conversation.id);
+    setItems([]);
+    setPlans({});
+    setTab("members");
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -235,6 +361,8 @@ export default function DaoConsolePage() {
         userItem,
         { id: rid("msg"), role: "agent", refusal: reply, at: Date.now() },
       ]);
+      void persistMessage("user", { text: prompt });
+      void persistMessage("agent", { refusal: reply });
       return;
     }
 
@@ -245,6 +373,18 @@ export default function DaoConsolePage() {
       userItem,
       { id: rid("msg"), role: "agent", planId: plan.id, at: Date.now() },
     ]);
+    void persistMessage("user", { text: prompt });
+    void persistMessage("agent", { plan });
+    if (activeConversationId) {
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          conversation.id === activeConversationId &&
+          conversation.title === "New chat"
+            ? { ...conversation, title: prompt.slice(0, 60) }
+            : conversation,
+        ),
+      );
+    }
 
     if (plan.authorization === "vote") {
       setTab("proposals");
@@ -284,8 +424,8 @@ export default function DaoConsolePage() {
   }
 
   async function ensureChain(): Promise<boolean> {
-    if (!isDaoChainConfigured) {
-      setChainMessage("NEXT_PUBLIC_DAO_CORE is not configured.");
+    if (!isChainDao) {
+      setChainMessage("This DAO is not configured on-chain.");
       return false;
     }
     if (activeChainId === config.chainId) return true;
@@ -334,7 +474,7 @@ export default function DaoConsolePage() {
     }
     if (!(await ensureChain())) return;
     let prepared = call ?? null;
-    if (!prepared && isDaoChainConfigured) {
+    if (!prepared && isChainDao) {
       const result = await preparePlan(plan, state);
       if (!result.ok) {
         setChainMessage(result.reason);
@@ -347,7 +487,7 @@ export default function DaoConsolePage() {
       return;
     }
     let nonce = Date.now();
-    if (isDaoChainConfigured) {
+    if (isChainDao) {
       try {
         const chainNonce = await publicClient.readContract({
           address: state.config.coreAddress as Address,
@@ -599,6 +739,28 @@ export default function DaoConsolePage() {
     );
   }
 
+  if (!isChainDao) {
+    return (
+      <Card className="mx-auto max-w-xl">
+        <CardContent className="space-y-4 p-8 text-center">
+          <h1 className="text-xl font-semibold tracking-tight">DAO not found</h1>
+          <p className="text-sm text-muted-foreground">
+            This URL does not point at a deployed DaoCore. Pick a DAO from the
+            list or create a new one.
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button asChild>
+              <Link href="/daos">All DAOs</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/new">Create DAO</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!ready) {
     return (
       <Card className="mx-auto max-w-xl">
@@ -621,7 +783,7 @@ export default function DaoConsolePage() {
                 title={
                   source === "chain"
                     ? "State read from DaoCore; writes go through the agent"
-                    : "Set NEXT_PUBLIC_DAO_CORE to read a deployed DAO"
+                    : "This DAO has no on-chain state"
                 }
               >
                 {source === "chain" ? "on-chain" : "not configured"}
@@ -683,7 +845,7 @@ export default function DaoConsolePage() {
           <Button
             variant="outline"
             onClick={() => void refresh()}
-            disabled={refreshing || !isDaoChainConfigured}
+            disabled={refreshing || !isChainDao}
           >
             <RefreshCw className="h-4 w-4" /> Refresh
           </Button>
@@ -705,9 +867,9 @@ export default function DaoConsolePage() {
           </>
         ) : (
           <>
-            No <span className="font-mono">NEXT_PUBLIC_DAO_CORE</span> is
-            configured. Set it to a deployed DaoCore to read the DAO and execute
-            through the agent. There is no local or simulated state.
+            This URL points at a DaoCore but the chain read has not succeeded
+            yet. Check the RPC, then press Refresh. There is no local or
+            simulated state.
           </>
         )}
       </Alert>
@@ -796,29 +958,54 @@ export default function DaoConsolePage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <AgentChat
-          items={items}
-          plans={plans}
-          busyPlanId={busyPlanId}
-          onSend={sendPrompt}
-          onExecute={executePlan}
-          onRequestSignature={requestSignature}
-          canExecute={isAdmin}
-          adminAddress={state.config.adminAddress}
-          onOpenProposal={() =>
-            setChainMessage(
-              "Governance actions need a concrete on-chain proposal target; the console does not encode arbitrary proposal calldata yet.",
-            )
-          }
-          onDismiss={(plan) => {
-            setPlans((previous) => {
-              if (!previous[plan.id]) return previous;
-              const next = { ...previous };
-              delete next[plan.id];
-              return next;
-            });
-          }}
-        />
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-white/70 p-2">
+            <select
+              value={activeConversationId ?? ""}
+              onChange={(event) => setActiveConversationId(event.target.value)}
+              disabled={conversationLoading}
+              className="h-9 flex-1 rounded-md border border-input bg-white px-2 text-sm"
+              aria-label="Conversation"
+            >
+              {conversations.length === 0 ? (
+                <option value="">
+                  {conversationLoading ? "Loading…" : "No chats"}
+                </option>
+              ) : null}
+              {conversations.map((conversation) => (
+                <option key={conversation.id} value={conversation.id}>
+                  {conversation.title}
+                </option>
+              ))}
+            </select>
+            <Button size="sm" variant="outline" onClick={() => void newChat()}>
+              <Plus className="h-4 w-4" /> New chat
+            </Button>
+          </div>
+          <AgentChat
+            items={items}
+            plans={plans}
+            busyPlanId={busyPlanId}
+            onSend={sendPrompt}
+            onExecute={executePlan}
+            onRequestSignature={requestSignature}
+            canExecute={isAdmin}
+            adminAddress={state.config.adminAddress}
+            onOpenProposal={() =>
+              setChainMessage(
+                "Governance actions need a concrete on-chain proposal target; the console does not encode arbitrary proposal calldata yet.",
+              )
+            }
+            onDismiss={(plan) => {
+              setPlans((previous) => {
+                if (!previous[plan.id]) return previous;
+                const next = { ...previous };
+                delete next[plan.id];
+                return next;
+              });
+            }}
+          />
+        </div>
 
         <TransactionFeed
           state={state}
@@ -912,7 +1099,7 @@ export default function DaoConsolePage() {
                 }
               : previous,
           );
-          if (current.call && isDaoChainConfigured && !result.simulated) {
+          if (current.call && isChainDao && !result.simulated) {
             const auth: AdminAuth = {
               nonce: BigInt(current.request.nonce),
               expiry: BigInt(current.request.expiry),
@@ -921,7 +1108,7 @@ export default function DaoConsolePage() {
             void submitCall(current.plan, current.call, auth);
             return;
           }
-          if (current.call && isDaoChainConfigured && result.simulated) {
+          if (current.call && isChainDao && result.simulated) {
             setChainMessage(
               "A simulated signature cannot authorize an on-chain call; connect the admin wallet and sign.",
             );

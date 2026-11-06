@@ -189,3 +189,19 @@ export type ChatItem = {
   refusal?: Refusal;
   at: number;
 };
+
+export type DaoConversation = {
+  id: string;
+  dao: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DaoMessage = {
+  id: string;
+  conversationId: string;
+  role: "user" | "agent";
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
