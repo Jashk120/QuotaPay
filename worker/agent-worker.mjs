@@ -12,7 +12,7 @@
  * Real on-chain submission lands behind EXECUTE_ONCHAIN=true (stubbed).
  */
 import { neon } from "@neondatabase/serverless";
-import { parsePrompt } from "../lib/dao/agent.mjs";
+import { runLoop } from "./loop.mjs";
 
 const url = process.env.WORKER_DATABASE_URL || process.env.DATABASE_URL;
 if (!url) {
@@ -43,9 +43,11 @@ async function claim() {
 }
 
 async function processOne(row) {
-  let reply;
+  let outcome;
   try {
-    reply = parsePrompt(row.prompt, row.state_snapshot);
+    outcome = await runLoop({ prompt: row.prompt }, row.state_snapshot, {
+      executeOnchain: EXECUTE,
+    });
   } catch (e) {
     await sql`
       update agent_intents set status = 'failed', error = ${String(e?.message ?? e).slice(0, 500)}, updated_at = now()
@@ -53,17 +55,19 @@ async function processOne(row) {
     `;
     return;
   }
-  const source = "worker:local";
+  const reply = outcome.reply ?? null;
+  const trace = outcome.trace ?? [];
+  const source = "worker:react";
   await sql`
-    update agent_intents set status = 'done', reply = ${JSON.stringify(reply)}, source = ${source}, updated_at = now()
+    update agent_intents set status = 'done', reply = ${JSON.stringify({ reply, loop: outcome })}, source = ${source}, updated_at = now()
     where id = ${row.id}
   `;
   const plan = reply?.kind === "plan" ? reply.plan : null;
   await sql`
     insert into agent_events (id, intent_id, action, tier, title, authorizers, simulated)
-    values (${rid("e")}, ${row.id}, ${plan?.action ?? "refusal"}, ${(plan?.tier ?? 0)}, ${(plan?.title ?? reply?.title ?? "refused").toString().slice(0, 200)}, ${JSON.stringify(plan ? ["worker"] : ["worker:refused"])}, ${!EXECUTE})
+    values (${rid("e")}, ${row.id}, ${outcome.skill ?? plan?.action ?? "refusal"}, ${(plan?.tier ?? 0)}, ${(plan?.title ?? reply?.title ?? outcome.status).toString().slice(0, 200)}, ${JSON.stringify([`worker:${outcome.status}`])}, ${!EXECUTE})
   `;
-  console.log(`${EXECUTE ? "[execute:stub] " : ""}done ${row.id} -> ${plan ? `${plan.action} tier${plan.tier}` : "refusal"}`);
+  console.log(`${EXECUTE ? "[execute:stub] " : ""}done ${row.id} -> ${outcome.status} steps=${trace.length}`);
 }
 
 console.log(`agent worker polling every ${POLL_MS}ms (execute=${EXECUTE})`);
