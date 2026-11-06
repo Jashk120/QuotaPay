@@ -7,6 +7,7 @@ import {
   parseEther,
   type Address,
 } from "viem";
+import { useWriteContract } from "wagmi";
 import {
   ArrowRight,
   Coins,
@@ -35,7 +36,6 @@ import { companyPaymasterAbi } from "@/lib/abis";
 import { config, isLiveConfigured } from "@/lib/config";
 import {
   bytes32FromLabel,
-  getWalletClient,
   readPaymaster,
   type PaymasterSnapshot,
 } from "@/lib/contracts";
@@ -50,7 +50,7 @@ import {
   setBeneficiaryActive,
   type DemoBeneficiary,
 } from "@/lib/demo-store";
-import { useMetaMask } from "@/lib/wallet";
+import { useConnectedWallet } from "@/lib/wallet";
 import { useAnonRpc } from "@/lib/anonRpc";
 
 function nowSeconds() {
@@ -58,7 +58,8 @@ function nowSeconds() {
 }
 
 export default function AdminPage() {
-  const { address: admin, connect, error: walletError } = useMetaMask();
+  const { address: admin, connect } = useConnectedWallet();
+  const { mutateAsync: writeContract } = useWriteContract();
   const { fetch: anonFetch } = useAnonRpc();
 
   const [paymaster, setPaymaster] = useState("");
@@ -138,10 +139,7 @@ export default function AdminPage() {
 
   async function write(
     action: string,
-    fn: (
-      client: ReturnType<typeof getWalletClient>,
-      account: Address,
-    ) => Promise<`0x${string}`>,
+    fn: () => Promise<`0x${string}`>,
   ): Promise<boolean> {
     setError(null);
     setNotice(null);
@@ -155,8 +153,7 @@ export default function AdminPage() {
     }
     setBusy(action);
     try {
-      const client = getWalletClient(admin);
-      const hash = await fn(client, admin);
+      const hash = await fn();
       setNotice(`${action} submitted: ${hash.slice(0, 10)}…`);
       await refresh();
       return true;
@@ -190,13 +187,12 @@ export default function AdminPage() {
     const limit = BigInt(perPeriodLimit || "0");
 
     if (live) {
-      const ok = await write("Enroll beneficiary", (client, account) =>
-        client.writeContract({
+      const ok = await write("Enroll beneficiary", () =>
+        writeContract({
           address: paymaster as Address,
           abi: companyPaymasterAbi,
           functionName: "enroll",
           args: [id, wallet as Address, BigInt(expiry), periodLength, limit, groupId],
-          account,
         }),
       );
       if (!ok) return;
@@ -222,13 +218,12 @@ export default function AdminPage() {
 
   async function revoke(row: DemoBeneficiary) {
     if (live) {
-      const ok = await write("Revoke wallet", (client, account) =>
-        client.writeContract({
+      const ok = await write("Revoke wallet", () =>
+        writeContract({
           address: paymaster as Address,
           abi: companyPaymasterAbi,
           functionName: "revokeWallet",
           args: [row.wallet],
-          account,
         }),
       );
       if (!ok) return;
@@ -239,13 +234,12 @@ export default function AdminPage() {
 
   async function reactivate(row: DemoBeneficiary) {
     if (live) {
-      const ok = await write("Reactivate wallet", (client, account) =>
-        client.writeContract({
+      const ok = await write("Reactivate wallet", () =>
+        writeContract({
           address: paymaster as Address,
           abi: companyPaymasterAbi,
           functionName: "setWalletActive",
           args: [row.wallet, true],
-          account,
         }),
       );
       if (!ok) return;
@@ -289,7 +283,6 @@ export default function AdminPage() {
           live mode.
         </Alert>
       ) : null}
-      {walletError ? <Alert variant="error">{walletError}</Alert> : null}
       {error ? (
         <Alert variant="error" title="Action failed">
           {error}
@@ -496,28 +489,25 @@ export default function AdminPage() {
               variant="secondary"
               disabled={busy !== null || !live || !admin}
               onClick={() =>
-                void write("Update policy", async (client, account) => {
+                void write("Update policy", async () => {
                   const paymasterAddress = paymaster as Address;
-                  await client.writeContract({
+                  await writeContract({
                     address: paymasterAddress,
                     abi: companyPaymasterAbi,
                     functionName: "setCreditPerTx",
                     args: [BigInt(creditPerTx || "1")],
-                    account,
                   });
-                  await client.writeContract({
+                  await writeContract({
                     address: paymasterAddress,
                     abi: companyPaymasterAbi,
                     functionName: "setGlobalCreditLimit",
                     args: [BigInt(globalCreditLimit || "0")],
-                    account,
                   });
-                  return client.writeContract({
+                  return writeContract({
                     address: paymasterAddress,
                     abi: companyPaymasterAbi,
                     functionName: "setMaxSponsorCost",
                     args: [parseEther(maxSponsorEth || "0.002")],
-                    account,
                   });
                 })
               }
@@ -647,14 +637,13 @@ export default function AdminPage() {
               <Button
                 disabled={busy !== null || !live || !admin}
                 onClick={() =>
-                  void write("Deposit", (client, account) =>
-                    client.writeContract({
+                  void write("Deposit", () =>
+                    writeContract({
                       address: paymaster as Address,
                       abi: companyPaymasterAbi,
                       functionName: "deposit",
                       args: [],
                       value: parseEther(depositEth || "0"),
-                      account,
                     }),
                   )
                 }
@@ -665,13 +654,12 @@ export default function AdminPage() {
                 variant="outline"
                 disabled={busy !== null || !live || !admin}
                 onClick={() =>
-                  void write("Request withdrawal", (client, account) =>
-                    client.writeContract({
+                  void write("Request withdrawal", () =>
+                    writeContract({
                       address: paymaster as Address,
                       abi: companyPaymasterAbi,
                       functionName: "requestWithdrawal",
                       args: [parseEther(withdrawEth || "0")],
-                      account,
                     }),
                   )
                 }
@@ -682,13 +670,12 @@ export default function AdminPage() {
                 variant="outline"
                 disabled={busy !== null || !live || !admin}
                 onClick={() =>
-                  void write("Execute withdrawal", (client, account) =>
-                    client.writeContract({
+                  void write("Execute withdrawal", () =>
+                    writeContract({
                       address: paymaster as Address,
                       abi: companyPaymasterAbi,
                       functionName: "executeWithdrawal",
                       args: [],
-                      account,
                     }),
                   )
                 }
@@ -699,13 +686,12 @@ export default function AdminPage() {
                 variant="ghost"
                 disabled={busy !== null || !live || !admin}
                 onClick={() =>
-                  void write("Cancel withdrawal", (client, account) =>
-                    client.writeContract({
+                  void write("Cancel withdrawal", () =>
+                    writeContract({
                       address: paymaster as Address,
                       abi: companyPaymasterAbi,
                       functionName: "cancelWithdrawal",
                       args: [],
-                      account,
                     }),
                   )
                 }

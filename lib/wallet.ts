@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Address, Hex, Secp256k1 } from "ox";
+import { useAccount, useDisconnect } from "wagmi";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 
 const SESSION_STORAGE_KEY = "quotapay.session-key.v1";
 
@@ -46,6 +48,11 @@ export function clearSessionKey() {
   }
 }
 
+/**
+ * The beneficiary's embedded EIP-8141 wallet. No external wallet (MetaMask,
+ * WalletConnect, …) can sign an EIP-8141 frame transaction yet, so we hold a
+ * local session key in the browser and use it as the transaction sender.
+ */
 export function useSessionKey() {
   const [session, setSession] = useState<SessionKey | null>(null);
 
@@ -64,72 +71,26 @@ export function useSessionKey() {
   return { session, reset };
 }
 
-type Eip1193 = {
-  request: (args: { method: string; params?: unknown[] | object }) => Promise<unknown>;
-};
+/**
+ * Multi-wallet connection for the company admin (MetaMask, WalletConnect,
+ * Coinbase, Rainbow, …) backed by wagmi + RainbowKit. `connect` opens the
+ * RainbowKit modal. On-chain writes are performed with wagmi's
+ * `useWriteContract` in the pages.
+ */
+export function useConnectedWallet() {
+  const { address, isConnected, chainId } = useAccount();
+  const { disconnect } = useDisconnect();
+  const { openConnectModal } = useConnectModal();
 
-export function injectedProvider(): Eip1193 | undefined {
-  if (typeof window === "undefined") return undefined;
-  return (window as unknown as { ethereum?: Eip1193 }).ethereum;
-}
+  const connect = useCallback(() => {
+    openConnectModal?.();
+  }, [openConnectModal]);
 
-export function useMetaMask() {
-  const [address, setAddress] = useState<Address.Address | null>(null);
-  const [chainId, setChainId] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    const eth = injectedProvider();
-    if (!eth) return;
-    try {
-      const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
-      const cid = (await eth.request({ method: "eth_chainId" })) as string;
-      setAddress((accounts[0] as Address.Address) ?? null);
-      setChainId(Number(cid));
-    } catch {
-      // ignore passive refresh failures
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-    const eth = injectedProvider();
-    if (!eth) return;
-    // Some providers expose events; guard for the minimal EIP-1193 shape.
-    const onAccounts = () => void refresh();
-    (eth as unknown as { on?: (e: string, cb: () => void) => void }).on?.(
-      "accountsChanged",
-      onAccounts,
-    );
-    return () => {
-      (eth as unknown as { removeListener?: (e: string, cb: () => void) => void }).removeListener?.(
-        "accountsChanged",
-        onAccounts,
-      );
-    };
-  }, [refresh]);
-
-  const connect = useCallback(async () => {
-    setError(null);
-    const eth = injectedProvider();
-    if (!eth) {
-      setError("No injected wallet found. Install MetaMask.");
-      return null;
-    }
-    try {
-      const accounts = (await eth.request({
-        method: "eth_requestAccounts",
-      })) as string[];
-      const cid = (await eth.request({ method: "eth_chainId" })) as string;
-      const first = (accounts[0] as Address.Address) ?? null;
-      setAddress(first);
-      setChainId(Number(cid));
-      return first;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      return null;
-    }
-  }, []);
-
-  return { address, chainId, error, connect, refresh };
+  return {
+    address: address ?? null,
+    chainId: chainId ?? null,
+    isConnected,
+    connect,
+    disconnect,
+  };
 }

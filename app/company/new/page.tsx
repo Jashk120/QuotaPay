@@ -8,6 +8,7 @@ import {
   parseEventLogs,
   type Address,
 } from "viem";
+import { useWriteContract } from "wagmi";
 import {
   ArrowRight,
   Building2,
@@ -31,11 +32,10 @@ import { companyFactoryAbi } from "@/lib/abis";
 import { config, demoDefaults, isLiveConfigured } from "@/lib/config";
 import {
   bytes32FromLabel,
-  getWalletClient,
   publicClient,
 } from "@/lib/contracts";
 import { saveCompany, type DemoCompany } from "@/lib/demo-store";
-import { useMetaMask } from "@/lib/wallet";
+import { useConnectedWallet } from "@/lib/wallet";
 
 type Created = {
   company: DemoCompany;
@@ -52,7 +52,8 @@ function bigintOr(value: string, fallback: bigint) {
 }
 
 export default function NewCompanyPage() {
-  const { address: connected, connect, error: walletError } = useMetaMask();
+  const { address: connected, connect } = useConnectedWallet();
+  const { mutateAsync: writeContract } = useWriteContract();
 
   const [companyId, setCompanyId] = useState("acme");
   const [admin, setAdmin] = useState("");
@@ -136,10 +137,14 @@ export default function NewCompanyPage() {
       return;
     }
 
+    if (!connected) {
+      setError("Connect a wallet to deploy on-chain.");
+      return;
+    }
+
     setBusy(true);
     try {
-      const client = getWalletClient(effectiveAdmin);
-      const hash = await client.writeContract({
+      const hash = await writeContract({
         address: config.factoryAddress as Address,
         abi: companyFactoryAbi,
         functionName: "createCompany",
@@ -156,7 +161,6 @@ export default function NewCompanyPage() {
           },
         ],
         value,
-        account: effectiveAdmin,
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -196,12 +200,6 @@ export default function NewCompanyPage() {
           set, so this form saves locally. Deploy{" "}
           <span className="font-mono">CompanyFactory</span> and set the env var to
           create real instances.
-        </Alert>
-      ) : null}
-
-      {walletError ? (
-        <Alert variant="error" title="Wallet">
-          {walletError}
         </Alert>
       ) : null}
 
@@ -293,7 +291,7 @@ export default function NewCompanyPage() {
               </Field>
               <Field
                 label="Admin address"
-                hint={connected ? "connected wallet" : "connect MetaMask"}
+                hint={connected ? "connected wallet" : "connect a wallet"}
                 htmlFor="admin"
               >
                 <div className="flex gap-2">

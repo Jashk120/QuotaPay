@@ -105,12 +105,18 @@ and verifies the disabled-submission guard. It runs with
 
 ## Wallet model
 
-- **Company admin**: MetaMask (or a Safe) — normal contract calls.
+- **Company admin**: any EIP-1193 / WalletConnect wallet via the built-in
+  "Connect wallet" button (MetaMask, Coinbase, Rainbow, mobile wallets over
+  WalletConnect, …). Admin actions become normal contract calls signed by the
+  connected wallet. Set `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (from
+  https://cloud.walletconnect.com) to enable the WalletConnect / mobile option;
+  without it, injected wallets still work.
 - **Beneficiary**: a session key held in the browser, or a smart account. The
   address must be enrolled by the company admin.
 - **MetaMask cannot build or broadcast EIP-8141 frame transactions.** The pay
   page uses the session key to satisfy the EOA VERIFY frame and relays the
-  signed envelope to an EIP-8141 RPC.
+  signed envelope to an EIP-8141 RPC. No external wallet can sign an EIP-8141
+  frame transaction yet, so the beneficiary's wallet is generated in-browser.
 
 ## Ox wire compatibility
 

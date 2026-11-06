@@ -1,7 +1,5 @@
 import {
   createPublicClient,
-  createWalletClient,
-  custom,
   defineChain,
   http,
   keccak256,
@@ -34,28 +32,6 @@ export const publicClient = makePublicClient();
 
 export function bytes32FromLabel(label: string): Hex {
   return keccak256(stringToHex(label.trim()));
-}
-
-type Eip1193 = {
-  request: (args: {
-    method: string;
-    params?: unknown[] | object;
-  }) => Promise<unknown>;
-};
-
-export function getInjected(): Eip1193 | undefined {
-  if (typeof window === "undefined") return undefined;
-  return (window as unknown as { ethereum?: Eip1193 }).ethereum;
-}
-
-export function getWalletClient(account?: Address) {
-  const injected = getInjected();
-  if (!injected) throw new Error("No injected wallet found. Install MetaMask.");
-  return createWalletClient({
-    chain: devnet,
-    transport: custom(injected),
-    account,
-  });
 }
 
 export type PaymasterSnapshot = {
