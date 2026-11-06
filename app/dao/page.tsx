@@ -43,16 +43,16 @@ type Tab = "members" | "treasury" | "proposals" | "assets" | "activity" | "polic
 
 const ACTION_CODES: Record<ActionType, number> = {
   summarize: 0,
-  add_members: 1,
-  pay: 2,
-  acquire_asset: 3,
-  remove_member: 4,
-  change_role: 5,
-  dispose_asset: 6,
-  propose: 7,
-  update_policy: 8,
-  pause: 9,
-  vote: 10,
+  add_members: 1, // DaoCore.ACTION_ADD_MEMBERS
+  pay: 5, // DaoCore.ACTION_SPEND (not admin-signed today)
+  acquire_asset: 7, // DaoCore.ACTION_ACQUIRE_ASSET
+  remove_member: 2, // DaoCore.ACTION_REMOVE_MEMBER
+  change_role: 3, // DaoCore.ACTION_SET_ROLE
+  dispose_asset: 4, // DaoCore.ACTION_DISPOSE_ASSET
+  propose: 6, // DaoCore.ACTION_EXECUTE_PROPOSAL
+  update_policy: 0,
+  pause: 0,
+  vote: 0,
 };
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [

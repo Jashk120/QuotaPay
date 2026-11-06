@@ -85,21 +85,12 @@ const r1cs = path.join(WORK, "DaoVote.r1cs");
 const sharedPtau = path.resolve("build/zk/pot14_final.ptau");
 let ptau = sharedPtau;
 if (!fs.existsSync(ptau)) {
-  const p0 = path.join(OUT, "pot14_0000.ptau");
-  const p1 = path.join(OUT, "pot14_0001.ptau");
-  const pf = path.join(OUT, "pot14_final.ptau");
-  snark("powersoftau", "new", "bn128", String(POWER), p0, "-v");
-  snark(
-    "powersoftau",
-    "contribute",
-    p0,
-    p1,
-    "--name=quotapay-dao-devnet",
-    "-e=quotapay-dao-zk-devnet",
-    "-v",
+  // The committed verifier/fixture lineage uses the shared Membership ptau.
+  // Generating a fresh DAO-only ptau would silently produce a different
+  // verification key, so require the shared ceremony instead.
+  throw new Error(
+    `missing ${sharedPtau}; run "node scripts/zk-setup.mjs" once to create the shared pot14 before the DAO setup`,
   );
-  snark("powersoftau", "prepare", "phase2", p1, pf, "-v");
-  ptau = pf;
 }
 
 const z0 = path.join(OUT, "DaoVote_0000.zkey");
@@ -123,7 +114,6 @@ snark(
 
 const verifierPath = path.resolve("contracts/zk/DaoVoteVerifier.sol");
 snark("zkey", "export", "solidityverifier", finalZkey, verifierPath);
-
 let source = fs.readFileSync(verifierPath, "utf8");
 source = source.replaceAll("contract Groth16Verifier", "contract DaoVoteVerifier");
 const patches = [
@@ -154,3 +144,12 @@ console.log("patched DaoVoteVerifier.sol: fixed precompile gas forwarding");
 
 console.log(`\nwrote ${finalZkey}`);
 console.log("wrote contracts/zk/DaoVoteVerifier.sol");
+
+// Keep the committed test fixture in step with the contract.
+const fixtureDir = path.resolve("test/fixtures/zk-dao");
+fs.mkdirSync(fixtureDir, { recursive: true });
+fs.copyFileSync(
+  path.join(OUT, "verification_key.json"),
+  path.join(fixtureDir, "verification_key.json"),
+);
+console.log(`copied verification_key.json to ${fixtureDir}`);

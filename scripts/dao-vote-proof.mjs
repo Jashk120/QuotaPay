@@ -51,6 +51,12 @@ const witness = await daoVoteWitness({
   index: INDEX,
 });
 
+if (leaves[INDEX] !== witness.leaf) {
+  throw new Error(
+    `leaf at index ${INDEX} does not match the witness secret; use --secret for that leaf`,
+  );
+}
+
 fs.mkdirSync(OUT, { recursive: true });
 const inputPath = path.join(OUT, "vote-input.json");
 const proofPath = path.join(OUT, "vote-proof.json");
@@ -89,6 +95,13 @@ run([
   proofPath,
 ]);
 
+// The DAO test suite reads these committed copies.
+const fixtureDir = path.resolve("test/fixtures/zk-dao");
+fs.mkdirSync(fixtureDir, { recursive: true });
+fs.copyFileSync(proofPath, path.join(fixtureDir, "proof.json"));
+fs.copyFileSync(publicPath, path.join(fixtureDir, "public.json"));
+
 console.log(`\nproof:  ${proofPath}`);
 console.log(`public: ${publicPath}`);
+console.log(`copied proof.json and public.json to ${fixtureDir}`);
 console.log("public inputs:", JSON.parse(fs.readFileSync(publicPath, "utf8")));
