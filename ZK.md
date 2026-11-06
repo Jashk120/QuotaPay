@@ -118,6 +118,10 @@ Open `/zk`. The page:
 demo secret. A fresh clone must run `zk:setup` + `zk:publish` before `/zk` can
 prove. The CLI equivalent is `npm run zk:sponsor`.
 
+Browser check: `npx playwright test e2e/zk.spec.ts` loads the fixture
+credential, generates the proof in Chromium, and builds the 4-frame tx. It
+skips unless `npm run zk:publish` has been run.
+
 ## Nullifier model
 
 One sponsored transaction per credential per epoch:

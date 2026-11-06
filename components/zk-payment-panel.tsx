@@ -186,37 +186,59 @@ export function ZkPaymentPanel({
     setStatus("Generating the Groth16 proof in this browser…");
     try {
       const next = buildZkWitness(credential, session.address);
-      const liveRoot = await client.readContract({
-        address: paymaster,
-        abi: zkPaymasterAbi,
-        functionName: "root",
-      });
-      const liveEpoch = await client.readContract({
-        address: paymaster,
-        abi: zkPaymasterAbi,
-        functionName: "epoch",
-      });
-      if (BigInt(next.root) !== liveRoot) {
+
+      // The proof itself needs no chain access. Preflight when the RPC is
+      // reachable, but still let the user generate/inspect an offline proof.
+      let liveRoot: bigint | null = null;
+      let liveEpoch: bigint | null = null;
+      try {
+        [liveRoot, liveEpoch] = await Promise.all([
+          client.readContract({
+            address: paymaster,
+            abi: zkPaymasterAbi,
+            functionName: "root",
+          }),
+          client.readContract({
+            address: paymaster,
+            abi: zkPaymasterAbi,
+            functionName: "epoch",
+          }),
+        ]);
+      } catch {
+        setStatus("Contract preflight unavailable; generating the proof offline.");
+      }
+      if (liveRoot !== null && BigInt(next.root) !== liveRoot) {
         throw new Error(
           "Credential root does not match the paymaster's current root. Ask the admin for an updated Merkle path.",
         );
       }
-      if (BigInt(next.epoch) !== liveEpoch) {
+      if (liveEpoch !== null && BigInt(next.epoch) !== liveEpoch) {
         throw new Error(
           "Credential epoch does not match the paymaster's current epoch. The admin rotated it; request a fresh credential.",
         );
       }
-      const alreadyUsed = await client.readContract({
-        address: paymaster,
-        abi: zkPaymasterAbi,
-        functionName: "usedNullifier",
-        args: [BigInt(next.identityNullifier)],
-      });
-      setUsed(alreadyUsed);
-      if (alreadyUsed) {
-        throw new Error(
-          "This credential's identity nullifier is already spent in this epoch. Rotate the epoch or issue a new credential.",
-        );
+      if (liveRoot !== null) {
+        try {
+          const alreadyUsed = await client.readContract({
+            address: paymaster,
+            abi: zkPaymasterAbi,
+            functionName: "usedNullifier",
+            args: [BigInt(next.identityNullifier)],
+          });
+          setUsed(alreadyUsed);
+          if (alreadyUsed) {
+            throw new Error(
+              "This credential's identity nullifier is already spent in this epoch. Rotate the epoch or issue a new credential.",
+            );
+          }
+        } catch (e) {
+          if (
+            e instanceof Error &&
+            e.message.includes("identity nullifier is already spent")
+          ) {
+            throw e;
+          }
+        }
       }
 
       const nextProof = await proveZkMembership(
@@ -489,7 +511,10 @@ export function ZkPaymentPanel({
         ) : null}
 
         {proof ? (
-          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
+          <div
+            data-testid="zk-proof"
+            className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs"
+          >
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="success">
                 <CheckCircle2 className="mr-1 h-3 w-3" /> proof verified off-chain
@@ -505,7 +530,10 @@ export function ZkPaymentPanel({
         ) : null}
 
         {signed ? (
-          <div className="space-y-2 rounded-lg border border-border/60 bg-background/40 p-3 text-xs">
+          <div
+            data-testid="zk-signed"
+            className="space-y-2 rounded-lg border border-border/60 bg-background/40 p-3 text-xs"
+          >
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary" className="font-mono">
                 {signed.frames.length} frames
