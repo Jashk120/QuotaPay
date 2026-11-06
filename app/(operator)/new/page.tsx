@@ -517,7 +517,6 @@ export default function NewDaoPage() {
           <div className="grid gap-2 rounded-xl border border-border/70 bg-white/60 p-3 text-sm">
             <Row label="Factory" value={factory || "not configured"} mono />
             <Row label="Admin" value={address ?? "not connected"} mono />
-            <Row label="Frame enforcement" value="false (devnet)" />
           </div>
 
           {notice ? (
