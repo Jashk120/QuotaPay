@@ -133,7 +133,7 @@ export default function HomePage() {
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Button asChild size="lg" onClick={() => setRole("admin")}>
-              <Link href="/company/new">
+              <Link href="/sponsorship/company/new">
                 <Building2 className="h-4 w-4" /> I&apos;m a company admin
                 <ArrowRight className="h-4 w-4" />
               </Link>
@@ -144,7 +144,7 @@ export default function HomePage() {
               variant="outline"
               onClick={() => setRole("user")}
             >
-              <Link href="/register">
+              <Link href="/sponsorship/register">
                 <UserPlus className="h-4 w-4" /> I&apos;m a beneficiary
               </Link>
             </Button>

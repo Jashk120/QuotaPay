@@ -319,12 +319,12 @@ export default function AdminPage() {
         </div>
         <div className="flex gap-2">
           <Button asChild variant="outline">
-            <Link href="/company/new">
+            <Link href="/sponsorship/company/new">
               <Plus className="h-4 w-4" /> New company
             </Link>
           </Button>
           <Button asChild>
-            <Link href="/pay">
+            <Link href="/sponsorship/pay">
               Pay page <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -856,7 +856,7 @@ export default function AdminPage() {
             {company ? (
               <div className="pt-2">
                 <Button asChild size="sm" variant="outline">
-                  <Link href="/pay">
+                  <Link href="/sponsorship/pay">
                     Open pay page <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>

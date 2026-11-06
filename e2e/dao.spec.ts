@@ -7,7 +7,7 @@ async function sendPrompt(page: Page, prompt: string) {
 }
 
 test("plans, admin signatures and prompt-injection refusal", async ({ page }) => {
-  await page.goto("/dao");
+  await page.goto("/");
   await expect(
     page.getByRole("heading", { name: /operator console/i }),
   ).toBeVisible();
@@ -45,7 +45,7 @@ test("plans, admin signatures and prompt-injection refusal", async ({ page }) =>
 test("over-cap spend becomes a proposal that can be voted and executed", async ({
   page,
 }) => {
-  await page.goto("/dao");
+  await page.goto("/");
 
   const plan = await sendPrompt(page, "$800 spend for the design team");
   await expect(plan).toContainText("Tier 3");
@@ -69,23 +69,23 @@ test("over-cap spend becomes a proposal that can be voted and executed", async (
 test("invite acceptance and DAO creation update local state", async ({
   page,
 }) => {
-  await page.goto("/dao/join/ATLAS-1");
+  await page.goto("/join/ATLAS-1");
   await expect(page.getByTestId("dao-join")).toBeVisible();
   await page.getByTestId("dao-join").click();
   await expect(page.getByTestId("dao-join-success")).toBeVisible();
   await expect(page.getByTestId("dao-join-success")).toContainText("Sofia M.");
 
-  await page.goto("/dao");
+  await page.goto("/");
   await expect(
     page.getByTestId("dao-member-row").filter({ hasText: "Sofia M." }),
   ).toBeVisible();
 
-  await page.goto("/dao/new");
+  await page.goto("/new");
   await page.getByRole("button", { name: /interpret config/i }).click();
   await expect(page.getByLabel("Treasury (USDC)")).toHaveValue("5000");
   await page.getByTestId("dao-deploy").click();
   await page.getByTestId("dao-simulate-signature").click();
-  await expect(page).toHaveURL(/\/dao$/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/$/, { timeout: 20_000 });
   await expect(
     page.getByRole("heading", { name: /New Collective · operator console/i }),
   ).toBeVisible();

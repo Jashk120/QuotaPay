@@ -17,7 +17,7 @@ test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
   // 1. The beneficiary's browser session key is the wallet the admin authorizes.
   let sessionAddress = "";
   await test.step("beneficiary session key is generated", async () => {
-    await page.goto("/pay");
+    await page.goto("/sponsorship/pay");
     const session = page.getByTestId("zk-session");
     await expect(session).toHaveText(/^0x[0-9a-fA-F]{40}$/);
     sessionAddress = (await session.textContent())?.trim() ?? "";
@@ -26,7 +26,7 @@ test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
 
   // 2. Company registration + attaching a paymaster (demo mode saves locally).
   await test.step("admin registers a company with a paymaster", async () => {
-    await page.goto("/company/new");
+    await page.goto("/sponsorship/company/new");
     await page.getByLabel("Company ID").fill("acme");
     await page.getByLabel("Admin address").fill(ADMIN);
     await page.getByLabel("Treasury address").fill(ADMIN);
@@ -42,7 +42,7 @@ test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
 
   // 3. Admin dashboard is prefilled from the local company/paymaster record.
   await test.step("admin authorizes the beneficiary wallet", async () => {
-    await page.goto("/admin");
+    await page.goto("/sponsorship/admin");
     await expect(page.getByLabel("Company ID")).toHaveValue("acme");
     await expect(page.getByLabel("Paymaster address")).toHaveValue(PAYMASTER);
 
@@ -83,7 +83,7 @@ test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
       path.resolve("test/fixtures/zk/credential.json"),
       "utf8",
     );
-    await page.goto("/pay");
+    await page.goto("/sponsorship/pay");
     await expect(page.getByTestId("zk-session")).toHaveText(sessionAddress);
 
     await page.locator("textarea").fill(credential);

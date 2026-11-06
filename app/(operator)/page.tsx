@@ -351,7 +351,7 @@ export default function DaoConsolePage() {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">DAO operator</Badge>
-            <Badge variant="warning">UI-only demo</Badge>
+            <Badge variant="success">cloud worker</Badge>
             <Badge variant="outline" title="Intent parser in use">
               {llmSource?.startsWith("llm:") ? llmSource : "parser: local"}
             </Badge>
@@ -373,7 +373,7 @@ export default function DaoConsolePage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
-            <Link href="/dao/new">
+            <Link href="/new">
               <Plus className="h-4 w-4" /> New DAO
             </Link>
           </Button>
@@ -384,9 +384,12 @@ export default function DaoConsolePage() {
       </div>
 
       <Alert variant="info" title="What is real in this build">
-        The plan cards, tier checks and audit trail mirror the on-chain design,
-        but execution, proving and the intent parser are local simulations. Admin
-        signatures are real EIP-712 typed data when a wallet is connected.
+        Intents are queued in Neon and completed by the VPS worker with the real
+        ReAct loop; the intent parser is a live LLM (deepseek-v4.1-flash) with a
+        deterministic fallback. Tier gates, caps and admin signatures mirror
+        DaoCore/AgentAccount, but on-chain submission is still simulated
+        (<span className="font-mono">EXECUTE_ONCHAIN=false</span>) — proposals and
+        final execution remain a vote away.
       </Alert>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

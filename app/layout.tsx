@@ -8,11 +8,11 @@ import { RoleProvider } from "@/lib/role";
 
 export const metadata: Metadata = {
   title: {
-    default: "QuotaPay — sponsored EIP-8141 payments",
+    default: "QuotaPay — DAO operator agent",
     template: "%s · QuotaPay",
   },
   description:
-    "Company-scoped ERC-8421 sponsorship: register a company, authorize wallets, and let the paymaster cover EIP-8141 frame transactions.",
+    "Run a DAO by chatting with an agent you don't have to trust. On-chain tiers, caps and admin signatures; private, gas-sponsored voting.",
 };
 
 export default function RootLayout({
@@ -38,31 +38,31 @@ export default function RootLayout({
                         QuotaPay
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Sponsorship OS
+                        DAO operator agent
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Company-scoped sponsorship on EIP-8141 frame transactions.
+                      On-chain authority for an agent that runs your DAO.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
                     <Link
-                      href="/company/new"
+                      href="/"
                       className="transition-colors hover:text-foreground"
                     >
-                      Register a company
+                      Operator console
                     </Link>
                     <Link
-                      href="/admin"
+                      href="/new"
                       className="transition-colors hover:text-foreground"
                     >
-                      Admin
+                      New DAO
                     </Link>
                     <Link
-                      href="/pay"
+                      href="/sponsorship"
                       className="transition-colors hover:text-foreground"
                     >
-                      Pay
+                      Sponsorship
                     </Link>
                     <span className="hidden text-border/80 sm:inline">·</span>
                     <span>Draft devnet · not production audited</span>

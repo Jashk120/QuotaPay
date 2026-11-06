@@ -1,12 +1,10 @@
 import Link from "next/link";
-import { ArrowLeft, Bot, Plus } from "lucide-react";
+import { Bot, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-export default function DaoLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+/** Operator-shell sub-nav. The DAO product lives at the root; sponsorship is a
+ *  secondary vertical under /sponsorship. */
+export function DaoShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/60 px-3 py-2 backdrop-blur">
@@ -19,19 +17,19 @@ export default function DaoLayout({
               DAO operator
             </div>
             <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              UI-only demo
+              Agent console
             </div>
           </div>
         </div>
         <nav className="flex flex-wrap items-center gap-1 text-sm">
           <Link
-            href="/dao"
+            href="/"
             className="rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             Console
           </Link>
           <Link
-            href="/dao/new"
+            href="/new"
             className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <Plus className="h-3.5 w-3.5" /> New DAO
@@ -40,10 +38,10 @@ export default function DaoLayout({
             QuotaPay
           </Badge>
           <Link
-            href="/"
-            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            href="/sponsorship"
+            className="rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
+            Sponsorship
           </Link>
         </nav>
       </div>

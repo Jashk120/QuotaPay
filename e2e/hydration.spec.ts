@@ -2,13 +2,13 @@ import { test, expect } from "@playwright/test";
 
 const routes = [
   "/",
-  "/pay",
-  "/admin",
-  "/company/new",
-  "/blind",
-  "/dao",
-  "/dao/new",
-  "/dao/join/ATLAS-1",
+  "/new",
+  "/join/ATLAS-1",
+  "/sponsorship",
+  "/sponsorship/pay",
+  "/sponsorship/admin",
+  "/sponsorship/company/new",
+  "/sponsorship/blind",
 ];
 
 test("no React hydration errors on any route", async ({ page }) => {

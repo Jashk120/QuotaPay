@@ -245,12 +245,12 @@ export default function NewCompanyPage() {
             ) : null}
             <div className="flex flex-wrap gap-3">
               <Button asChild>
-                <Link href="/admin">
+                <Link href="/sponsorship/admin">
                   Open admin <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/pay">Try a payment</Link>
+                <Link href="/sponsorship/pay">Try a payment</Link>
               </Button>
             </div>
           </CardContent>

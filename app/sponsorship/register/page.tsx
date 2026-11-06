@@ -162,7 +162,7 @@ export default function RegisterPage() {
                   <span>{submitted.groupId}</span>
                 </div>
                 <Button asChild className="mt-2 w-full">
-                  <Link href="/pay">
+                  <Link href="/sponsorship/pay">
                     Go to Pay <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -172,7 +172,7 @@ export default function RegisterPage() {
             <Alert variant="info" title="What happens next">
               Your request is sent to the company admin. Once approved, you&apos;ll
               get a <span className="font-mono">credential</span> (secret + Merkle
-              path) to load on the <Link href="/pay" className="underline underline-offset-2">Pay</Link> page.
+              path) to load on the <Link href="/sponsorship/pay" className="underline underline-offset-2">Pay</Link> page.
               In demo mode you can also just load the bundled demo credential.
             </Alert>
           )}

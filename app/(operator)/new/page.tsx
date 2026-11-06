@@ -126,7 +126,7 @@ export default function NewDaoPage() {
       }),
     );
     await new Promise((resolve) => setTimeout(resolve, 450));
-    router.push("/dao");
+    router.push("/");
   }
 
   const snapshot = configSnapshot();
@@ -149,7 +149,7 @@ export default function NewDaoPage() {
       </div>
 
       <Button asChild variant="ghost" size="sm" className="-ml-2">
-        <Link href="/dao">
+        <Link href="/">
           <ArrowLeft className="h-4 w-4" /> Back to the console
         </Link>
       </Button>

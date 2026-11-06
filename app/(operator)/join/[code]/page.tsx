@@ -122,7 +122,7 @@ export default function JoinDaoPage() {
               <Row label="Invite" value={code} mono />
             </div>
             <Button asChild className="w-full">
-              <Link href="/dao">
+              <Link href="/">
                 Open the operator console <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -135,7 +135,7 @@ export default function JoinDaoPage() {
             real flow it comes from the off-chain registry.
           </Alert>
           <Button asChild variant="outline">
-            <Link href="/dao/join/ATLAS-1">
+            <Link href="/join/ATLAS-1">
               <Link2 className="h-4 w-4" /> Open the demo invite
             </Link>
           </Button>

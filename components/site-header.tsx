@@ -19,14 +19,17 @@ import { useRole, type Role } from "@/lib/role";
 
 const navLinks: Record<Role, { href: string; label: string }[]> = {
   user: [
-    { href: "/", label: "Overview" },
-    { href: "/register", label: "Register" },
-    { href: "/pay", label: "Pay" },
+    { href: "/", label: "Operator" },
+    { href: "/new", label: "New DAO" },
+    { href: "/sponsorship", label: "Sponsorship" },
+    { href: "/sponsorship/pay", label: "Pay" },
   ],
   admin: [
-    { href: "/", label: "Overview" },
-    { href: "/company/new", label: "Register company" },
-    { href: "/admin", label: "Admin" },
+    { href: "/", label: "Operator" },
+    { href: "/new", label: "New DAO" },
+    { href: "/sponsorship", label: "Sponsorship" },
+    { href: "/sponsorship/company/new", label: "Register company" },
+    { href: "/sponsorship/admin", label: "Admin" },
   ],
 };
 
@@ -107,7 +110,7 @@ export function SiteHeader() {
           <div className="leading-tight">
             <div className="text-sm font-semibold tracking-tight">QuotaPay</div>
             <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Sponsorship OS
+              DAO operator
             </div>
           </div>
         </Link>
