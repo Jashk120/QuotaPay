@@ -113,7 +113,9 @@ export default function DaoConsolePage() {
       { id: rid("msg"), role: "agent", planId: plan.id, at: Date.now() },
     ]);
 
-    if (plan.action === "remove_member" || plan.action === "add_members") {
+    if (plan.authorization === "vote") {
+      setTab("proposals");
+    } else if (plan.action === "remove_member" || plan.action === "add_members") {
       setTab("members");
     } else if (plan.action === "pay") {
       setTab("treasury");
