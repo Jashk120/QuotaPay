@@ -740,6 +740,10 @@ contract DaoCore {
         return _proposals[proposalId].snapshotRoot;
     }
 
+    function proposalDeadline(uint256 proposalId) external view returns (uint64) {
+        return _proposals[proposalId].deadline;
+    }
+
     function getProposal(uint256 proposalId) external view returns (Proposal memory) {
         return _proposals[proposalId];
     }

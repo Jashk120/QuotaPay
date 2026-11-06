@@ -201,4 +201,52 @@ test("T20 DAO vote circuit, verifier and paymaster", async (t) => {
       before + ethers.parseEther("0.5")
     );
   });
+
+  await t.test("charge rejects a closed proposal before frame context", async () => {
+    const registry = await deploy(artifacts, "MockRegistry", admin);
+    const verifier = await deploy(artifacts, "DaoVoteVerifier", admin);
+    const source = await deploy(artifacts, "MockDaoVoteSource", admin);
+    await (await source.set(ethers.id("snapshot-root"), 0)).wait();
+
+    const paymaster = await deploy(
+      artifacts,
+      "DaoVotePaymaster",
+      admin,
+      [
+        adminAddr,
+        treasuryAddr,
+        await registry.getAddress(),
+        await verifier.getAddress(),
+        await source.getAddress(),
+        1000n,
+        0,
+      ]
+    );
+
+    const zero2 = ["0x0", "0x0"];
+    const zero22 = [
+      ["0x0", "0x0"],
+      ["0x0", "0x0"],
+    ];
+    const data = paymaster.interface.encodeFunctionData("charge", [
+      zero2,
+      zero22,
+      zero2,
+      7n,
+      1n,
+      2n,
+      true,
+    ]);
+
+    const paymasterAddr = await paymaster.getAddress();
+    await expectRevert(
+      () =>
+        chain.provider.call({
+          to: paymasterAddr,
+          data,
+          from: "0x00000000000000000000000000000000000000aa",
+        }),
+      "voting closed"
+    );
+  });
 });

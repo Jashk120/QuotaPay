@@ -161,6 +161,25 @@ contract MockVotePaymaster {
     }
 }
 
+/// Minimal `DaoCore` view stand-in for `DaoVotePaymaster.charge` deadline tests.
+contract MockDaoVoteSource {
+    bytes32 public root;
+    uint64 public deadline;
+
+    function set(bytes32 root_, uint64 deadline_) external {
+        root = root_;
+        deadline = deadline_;
+    }
+
+    function proposalSnapshotRoot(uint256) external view returns (bytes32) {
+        return root;
+    }
+
+    function proposalDeadline(uint256) external view returns (uint64) {
+        return deadline;
+    }
+}
+
 /// Minimal v4 `PoolManager` stand-in for `DaoSwapModule` unit tests.
 ///
 /// It reproduces the parts the module relies on: the unlock/callback cycle,

@@ -187,6 +187,12 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
 
     await (await agentExecute("createProposal", [coreAddr, data, 0n, ethers.ZeroHash, ethers.ZeroHash])).wait();
     const proposalId = await core.proposalCount();
+    const proposal = await core.getProposal(proposalId);
+    assert.equal(
+      await core.proposalDeadline(proposalId),
+      proposal.deadline,
+      "proposalDeadline must mirror the stored voting deadline"
+    );
     await (await paymaster.setConsumed(coreAddr, proposalId, 5001n, true)).wait();
     await (await paymaster.setChoice(coreAddr, proposalId, 5001n, false)).wait();
     await (await core.connect(alice).castVote(proposalId, false, 5001n)).wait();

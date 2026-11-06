@@ -16,6 +16,7 @@ interface IDaoVoteVerifier {
 
 interface IDaoCoreVote {
     function proposalSnapshotRoot(uint256 proposalId) external view returns (bytes32);
+    function proposalDeadline(uint256 proposalId) external view returns (uint64);
 }
 
 /// Sponsors private DAO votes.
@@ -178,6 +179,12 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
 
         bytes32 root = IDaoCoreVote(dao).proposalSnapshotRoot(proposalId);
         require(root != bytes32(0), "unknown proposal");
+        // Without this, a member can burn the proof and the sponsor's gas after
+        // the vote window: `castVote` would then revert "voting closed".
+        require(
+            block.timestamp < IDaoCoreVote(dao).proposalDeadline(proposalId),
+            "voting closed"
+        );
         require(
             !voteConsumed[dao][proposalId][voteNullifier],
             "already voted"
