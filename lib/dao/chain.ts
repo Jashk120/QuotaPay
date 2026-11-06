@@ -623,6 +623,93 @@ export async function readChainSnapshot(
   };
 }
 
+export type ChainDaoSummary = {
+  core: Address;
+  daoId: Hex;
+  admin: Address;
+  agentAccount: Address;
+  agentPaused: boolean;
+  memberCount: number;
+  proposalCount: number;
+  balance: bigint;
+  decimals: number;
+};
+
+/**
+ * Cheap card-level read for the DAO list.
+ *
+ * `readChainSnapshot` reads every member, proposal, asset and log — the right
+ * thing for one open console, far too much for N cards. This only reads the
+ * handful of slots the list renders.
+ */
+export async function readChainSummary(
+  client: PublicClient,
+  core: Address,
+): Promise<ChainDaoSummary> {
+  const [daoId, admin, agentAccount, memberCount, proposalCount] =
+    await Promise.all([
+      client.readContract({ address: core, abi: daoCoreAbi, functionName: "daoId" }),
+      client.readContract({ address: core, abi: daoCoreAbi, functionName: "admin" }),
+      client.readContract({
+        address: core,
+        abi: daoCoreAbi,
+        functionName: "agentAccount",
+      }),
+      client.readContract({
+        address: core,
+        abi: daoCoreAbi,
+        functionName: "memberCount",
+      }),
+      client.readContract({
+        address: core,
+        abi: daoCoreAbi,
+        functionName: "proposalCount",
+      }),
+    ]);
+
+  let agentPaused = false;
+  try {
+    agentPaused = await client.readContract({
+      address: agentAccount as Address,
+      abi: agentAccountAbi,
+      functionName: "paused",
+    });
+  } catch {
+    /* agent account may not be readable yet */
+  }
+
+  const tokenAddress = config.usdcAddress;
+  let balance = 0n;
+  let decimals = config.usdcDecimals;
+  if (tokenAddress) {
+    try {
+      balance = await client.readContract({
+        address: tokenAddress as Address,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [core],
+      });
+    } catch {
+      /* token may not be deployed on this chain */
+    }
+  } else {
+    balance = await client.getBalance({ address: core });
+    decimals = 18;
+  }
+
+  return {
+    core,
+    daoId: daoId as Hex,
+    admin: admin as Address,
+    agentAccount: agentAccount as Address,
+    agentPaused: Boolean(agentPaused),
+    memberCount: Number(memberCount),
+    proposalCount: Number(proposalCount),
+    balance,
+    decimals,
+  };
+}
+
 function toNumber(value: bigint, decimals: number): number {
   return Number(formatUnits(value, decimals));
 }

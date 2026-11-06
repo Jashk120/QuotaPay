@@ -15,7 +15,11 @@ import {
   sendFrameSponsoredTransfer,
   sendRawSponsoredTransfer,
 } from "@/lib/devnetFrameTx";
-import { agentAccountAbi, daoCoreAbi } from "@/lib/daoAbis.mjs";
+import {
+  agentAccountAbi,
+  daoCoreAbi,
+  sharedDaoGasPaymasterAbi,
+} from "@/lib/daoAbis.mjs";
 import { config } from "@/lib/config";
 import { executeMessage, EXECUTE_NONCE_WINDOW_MS } from "@/lib/dao/executeAuth";
 
@@ -60,7 +64,6 @@ function bad(message: string, status = 400) {
 }
 
 export async function POST(request: Request) {
-  const core = (process.env.DAO_CORE ?? config.daoCoreAddress) as Address | "";
   const paymaster = (process.env.DAO_GAS_PAYMASTER ??
     config.daoGasPaymaster) as Address | "";
   const agentKey = process.env.DAO_AGENT_KEY as Hex | undefined;
@@ -72,7 +75,6 @@ export async function POST(request: Request) {
       config.chainId,
   );
 
-  if (!core || !isAddress(core)) return bad("DAO_CORE is not configured", 503);
   if (!paymaster || !isAddress(paymaster)) {
     return bad("DAO_GAS_PAYMASTER is not configured", 503);
   }
@@ -85,10 +87,13 @@ export async function POST(request: Request) {
     return bad("invalid JSON body");
   }
 
-  const to = body.to ?? "";
+  // A DAO is addressed by its DaoCore. The target is the source of truth, so
+  // every factory-created DAO works without touching DAO_CORE or restarting.
+  const core = body.to ?? "";
+  const to = core;
   const data = body.data ?? "";
-  if (!isAddress(to) || to.toLowerCase() !== core.toLowerCase()) {
-    return bad("call target is not the configured DaoCore");
+  if (!isAddress(core)) {
+    return bad("call target is not a DaoCore address");
   }
   if (!/^0x[0-9a-fA-F]+$/.test(data) || data.length < 10) {
     return bad("calldata is missing or malformed");
@@ -149,6 +154,26 @@ export async function POST(request: Request) {
       if (!valid) return bad("bad execute authorization", 401);
       usedSignatures.add(signature);
       if (usedSignatures.size > 1024) usedSignatures.clear();
+    }
+
+    // The shared gas paymaster must sponsor this DAO's agent account. Any DAO
+    // can be added by its own admin; fail with an actionable message instead of
+    // letting the frame transaction die in validation.
+    try {
+      const sponsored = await client.readContract({
+        address: paymaster,
+        abi: sharedDaoGasPaymasterAbi,
+        functionName: "allowedAgents",
+        args: [agentAccount],
+      });
+      if (!sponsored) {
+        return bad(
+          "gas sponsorship is not enabled for this DAO. Open its console as the DAO admin and click Enable gas sponsorship.",
+          409,
+        );
+      }
+    } catch {
+      // Legacy per-DAO paymaster without an allowlist: let the tx decide.
     }
 
     const expectedSigner = (await client.readContract({

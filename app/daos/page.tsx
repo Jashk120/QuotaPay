@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { formatUnits } from "viem";
 import { ArrowRight, Bot, Coins, Loader2, Plus, Users, Vote } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,10 +15,13 @@ import {
   listOnchainDaos,
   type OnchainDao,
 } from "@/lib/dao/factory";
-import { useDaoState } from "@/lib/dao/use-dao";
+import { readChainSummary, type ChainDaoSummary } from "@/lib/dao/chain";
 
 export default function DaosPage() {
   const [daos, setDaos] = useState<OnchainDao[] | null>(null);
+  const [summaries, setSummaries] = useState<Record<string, ChainDaoSummary>>(
+    {},
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,6 +59,31 @@ export default function DaosPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!daos?.length) return;
+    let cancelled = false;
+    void Promise.all(
+      daos.map(async (entry) => {
+        try {
+          const summary = await readChainSummary(publicClient, entry.address);
+          return [entry.address, summary] as const;
+        } catch {
+          return [entry.address, null] as const;
+        }
+      }),
+    ).then((rows) => {
+      if (cancelled) return;
+      const next: Record<string, ChainDaoSummary> = {};
+      for (const [address, summary] of rows) {
+        if (summary) next[address] = summary;
+      }
+      setSummaries(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [daos]);
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -71,6 +100,14 @@ export default function DaosPage() {
         </Button>
       </div>
 
+      {error ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            Could not read the factory: {error}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {daos === null ? (
         <Card>
           <CardContent className="flex items-center justify-center gap-2 p-10 text-sm text-muted-foreground">
@@ -81,7 +118,8 @@ export default function DaosPage() {
         <Card>
           <CardContent className="space-y-4 p-8 text-center">
             <p className="text-sm text-muted-foreground">
-              No DAO is registered in this browser. Create one to get started.
+              No DAO is registered on this factory yet. Create one to get
+              started.
             </p>
             <Button asChild>
               <Link href="/new">
@@ -93,7 +131,11 @@ export default function DaosPage() {
       ) : (
         <div className="grid gap-5 md:grid-cols-2">
           {daos.map((entry) => (
-            <DaoCard key={entry.id} entry={entry} />
+            <DaoCard
+              key={entry.id}
+              entry={entry}
+              summary={summaries[entry.address]}
+            />
           ))}
           <CreateCard />
         </div>
@@ -102,7 +144,13 @@ export default function DaosPage() {
   );
 }
 
-function DaoCard({ entry }: { entry: OnchainDao }) {
+function DaoCard({
+  entry,
+  summary,
+}: {
+  entry: OnchainDao;
+  summary?: ChainDaoSummary;
+}) {
   const isEnv =
     Boolean(config.daoCoreAddress) &&
     entry.address.toLowerCase() === config.daoCoreAddress.toLowerCase();
@@ -110,18 +158,13 @@ function DaoCard({ entry }: { entry: OnchainDao }) {
     (isEnv ? config.daoName : "") ||
     daoNameFromId(entry.daoId) ||
     `DAO ${entry.address.slice(0, 6)}…${entry.address.slice(-4)}`;
-  const { state, ready, source } = useDaoState({
-    coreAddress: entry.address,
-    name,
-  });
-  const activeMembers = state.members.filter((member) => member.active).length;
-  const openProposals = state.proposals.filter(
-    (proposal) => proposal.status === "open",
-  ).length;
+  const balance = summary
+    ? money(Number(formatUnits(summary.balance, summary.decimals)))
+    : "—";
 
   return (
     <Link
-      href={`/dao/${entry.id}/chat`}
+      href={`/dao/${entry.address}/chat`}
       className="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <Card className="relative h-full overflow-hidden bg-gradient-to-br from-primary/[0.12] via-white to-[hsl(48_70%_97%)] transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[0_2px_4px_hsl(40_30%_20%/0.06),0_22px_50px_-26px_hsl(40_40%_30%/0.35)]">
@@ -142,34 +185,36 @@ function DaoCard({ entry }: { entry: OnchainDao }) {
               </div>
             </div>
             <Badge
-              variant={state.config.agentPaused ? "warning" : "success"}
+              variant={
+                summary?.agentPaused ? "warning" : summary ? "success" : "outline"
+              }
               className="shrink-0"
             >
-              {ready ? (state.config.agentPaused ? "paused" : "active") : "loading"}
+              {summary ? (summary.agentPaused ? "paused" : "active") : "loading"}
             </Badge>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
             <Mini
               icon={<Coins className="h-3 w-3" />}
-              value={money(state.config.treasuryUsdc)}
+              value={balance}
               label="USDC"
             />
             <Mini
               icon={<Users className="h-3 w-3" />}
-              value={String(activeMembers)}
+              value={summary ? String(summary.memberCount) : "—"}
               label="members"
             />
             <Mini
               icon={<Vote className="h-3 w-3" />}
-              value={String(openProposals)}
-              label="votes"
+              value={summary ? String(summary.proposalCount) : "—"}
+              label="proposals"
             />
           </div>
 
           <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
             <Badge variant="outline" className="text-[10px]">
-              {source === "chain" ? "on-chain" : "not configured"}
+              on-chain
             </Badge>
             <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-yellow-800">
               Open <ArrowRight className="h-3.5 w-3.5" />
