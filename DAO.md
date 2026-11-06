@@ -157,7 +157,10 @@ is in `lib/daoAbis.mjs`.
 # compile + unit tests (ganache)
 node --test "test/*.test.mjs"
 
-# rebuild the DAO circuit + verifier (devnet ceremony; reuses build/zk pot14)
+# one-time shared phase-1 ceremony (reused by the DAO circuit)
+node scripts/zk-setup.mjs
+
+# rebuild the DAO circuit + verifier (devnet ceremony; requires the shared pot14)
 node scripts/dao-zk-setup.mjs --force
 
 # regenerate the committed vote proof fixture
@@ -178,7 +181,9 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
 
 - EIP-8141 / ERC-8421 are drafts; the contracts are not audited.
 - The vote path needs the 500k staked validation budget (the Groth16 verifier is
-  ~258k gas). The agent action path fits the public 100k budget.
+  ~258k gas). The agent-action builder currently declares ~165k of validation
+  gas, so it also needs the staked/patched relay; it is not under the stock
+  public 100k cap.
 - The Poseidon root is agent-supplied and not verified against the commitment
   journal (see "Membership root"). This is the largest remaining trust gap.
 - `promptHash`/`planHash` are recorded on spends, proposals and their execution.
@@ -190,3 +195,6 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
   probe shows that chain 1337 cannot read SENDER frames during VERIFY, deploy
   with `DAO_FRAME_ENFORCED=false`; `DaoCore` remains the enforcement point.
 - The demo asset and price are mocks. No real RWA custody or oracle.
+- The UI is a local simulation. Its admin/config signature dialogs are not
+  submitted to `DaoCore`, and the join page's invite commitment is not yet the
+  Poseidon leaf the vote circuit expects.

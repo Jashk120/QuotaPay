@@ -60,21 +60,15 @@ const POLICY: PolicyRow[] = [
   },
   {
     target: "DaoCore",
-    selector: "executeProposal(uint256)",
-    label: "Execute a passed proposal",
+    selector: "createProposal(address,bytes,uint64,bytes32,bytes32)",
+    label: "Open a governance proposal",
     tier: 1,
   },
   {
     target: "DaoCore",
-    selector: "setPolicy((address,bytes4,bool,uint8)[])",
-    label: "Edit the agent mandate",
-    tier: 3,
-  },
-  {
-    target: "*",
-    selector: "*",
-    label: "Anything else",
-    tier: 3,
+    selector: "executeProposal(uint256)",
+    label: "Execute a passed proposal",
+    tier: 1,
   },
 ];
 

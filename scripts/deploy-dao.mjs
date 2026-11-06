@@ -28,6 +28,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { compileAll } from "../test/helpers/compile.mjs";
 
 const CHAIN_ID = 1337;
+const addressZero = "0x0000000000000000000000000000000000000000";
 const RPC = process.env.DEVNET_RPC ?? "https://altmempool.forshtat.com";
 const REGISTRY =
   process.env.STAKING_REGISTRY ?? "0xd51c04d7a0b01124e84de152f4e56d9eecb22d2f";
@@ -142,22 +143,22 @@ async function main() {
     throw new Error("deployer needs at least 0.2 ETH for factories + DAO + paymaster");
   }
 
-  console.log("\n[1/6] child factories");
+  console.log("\n[1/7] child factories");
   const coreFactory = await deploy(account, artifacts, "DaoCoreFactory");
   const accountFactory = await deploy(account, artifacts, "AgentAccountFactory");
   const moduleFactory = await deploy(account, artifacts, "AssetModuleFactory");
 
-  console.log("[2/6] orchestrator");
+  console.log("[2/7] orchestrator");
   const factory = await deploy(account, artifacts, "DaoFactory", [
     coreFactory,
     accountFactory,
     moduleFactory,
   ]);
 
-  console.log("[3/6] demo treasury token");
+  console.log("[3/7] demo treasury token");
   const usdc = await deploy(account, artifacts, "MockERC20", ["USDC", "USDC"]);
 
-  console.log("[4/6] creating demo DAO");
+  console.log("[4/7] creating demo DAO");
   const agentKey = process.env.AGENT_KEY ?? generatePrivateKey();
   const agentSigner = privateKeyToAccount(agentKey).address;
   const daoId = keccak256(stringToHex("demo-dao"));
@@ -179,6 +180,12 @@ async function main() {
       cfg,
       [],
       [
+        {
+          token: addressZero,
+          perTx: parseEther("0.01"),
+          perPeriod: parseEther("0.05"),
+          periodLength: 86_400,
+        },
         {
           token: usdc,
           perTx: parseEther("200"),
@@ -315,7 +322,7 @@ async function main() {
   );
   console.log("\nwrote deployments/dao-1337.json");
   console.log(`agent key: ${agentKey}`);
-  console.log("next: build an EIP-8141 frame tx with lib/devnetFrameTx.ts");
+  console.log("next: build the DAO frame txs with lib/daoFrameTx.mjs");
 }
 
 main().catch((error) => {

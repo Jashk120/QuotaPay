@@ -167,8 +167,14 @@ export default function DaoConsolePage() {
       openProposal(plan);
       return;
     }
-    if (plan.authorization === "admin" || plan.authorization === "admin-only") {
+    if (plan.authorization === "admin") {
       requestSignature(plan);
+      return;
+    }
+    if (plan.authorization === "admin-only") {
+      // Emergency pause is a direct admin call; DaoCore.pauseAgent takes no
+      // AdminAuth, so there is nothing to sign.
+      void runPlan(plan, "admin");
       return;
     }
     void runPlan(plan, "agent");
