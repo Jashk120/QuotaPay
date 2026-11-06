@@ -5,7 +5,8 @@
  * Usage:
  *   node scripts/dao-vote-proof.mjs [--out build/zk-dao] [--index 0]
  *     [--dao 0x..] [--chain-id 1337] [--proposal-id 7]
- *     [--session-key 0x..] [--secret 0x..]
+ *     [--session-key 0x..] [--paymaster 0x..] [--support true|false]
+ *     [--secret 0x..]
  *
  * The fixture in test/fixtures/zk-dao is only overwritten when the inputs are
  * the committed defaults; pass --write-fixture to force it.
@@ -32,6 +33,10 @@ const PROPOSAL_ID = BigInt(arg("proposal-id", "7"));
 const SESSION_KEY = BigInt(
   arg("session-key", "0x348836a9b164f241945205b5a92f496bb8c3c1d8"),
 );
+const PAYMASTER = BigInt(
+  arg("paymaster", "0x000000000000000000000000000000000000dA0a"),
+);
+const SUPPORT = arg("support", "true") !== "false";
 const SECRET = BigInt(
   arg("secret", "0x1111111111111111111111111111111111111111111111111111111111111111"),
 );
@@ -42,6 +47,8 @@ const DEFAULT_FIXTURE_INPUTS =
   CHAIN_ID === 1337n &&
   PROPOSAL_ID === 7n &&
   SESSION_KEY === 0x348836a9b164f241945205b5a92f496bb8c3c1d8n &&
+  PAYMASTER === 0x000000000000000000000000000000000000da0an &&
+  SUPPORT === true &&
   SECRET ===
     0x1111111111111111111111111111111111111111111111111111111111111111n;
 
@@ -61,6 +68,8 @@ const witness = await daoVoteWitness({
   chainId: CHAIN_ID,
   proposalId: PROPOSAL_ID,
   sessionKey: SESSION_KEY,
+  paymaster: PAYMASTER,
+  support: SUPPORT,
   leaves,
   index: INDEX,
 });
@@ -98,6 +107,8 @@ console.log(`leaf:             ${witness.leaf}`);
 console.log(`root:             ${witness.root}`);
 console.log(`voteNullifier:    ${witness.voteNullifier}`);
 console.log(`sessionNullifier: ${witness.sessionNullifier}`);
+console.log(`paymaster:        ${PAYMASTER}`);
+console.log(`support:          ${SUPPORT}`);
 console.log(`index:            ${INDEX}`);
 
 run([

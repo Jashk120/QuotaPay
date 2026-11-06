@@ -46,6 +46,8 @@ const DAO = 0xda0an;
 const CHAIN_ID = 1337n;
 const PROPOSAL_ID = 7n;
 const SESSION_KEY = "0x348836a9b164f241945205b5a92f496bb8c3c1d8";
+const PAYMASTER = "0x000000000000000000000000000000000000dA0a";
+const SUPPORT = true;
 const SECRETS = [
   0x1111111111111111111111111111111111111111111111111111111111111111n,
   0x2222222222222222222222222222222222222222222222222222222222222222n,
@@ -71,6 +73,8 @@ test("T20 DAO vote circuit, verifier and paymaster", async (t) => {
       chainId: CHAIN_ID,
       proposalId: PROPOSAL_ID,
       sessionKey: SESSION_KEY,
+      paymaster: PAYMASTER,
+      support: SUPPORT,
       leaves,
       index: 0,
     });
@@ -95,6 +99,8 @@ test("T20 DAO vote circuit, verifier and paymaster", async (t) => {
       chainId: CHAIN_ID,
       proposalId: 8n,
       sessionKey: SESSION_KEY,
+      paymaster: PAYMASTER,
+      support: SUPPORT,
       leaves: leavesA,
       index: 0,
     });
@@ -104,6 +110,8 @@ test("T20 DAO vote circuit, verifier and paymaster", async (t) => {
       chainId: CHAIN_ID,
       proposalId: PROPOSAL_ID,
       sessionKey: SESSION_KEY,
+      paymaster: PAYMASTER,
+      support: SUPPORT,
       leaves: leavesB,
       index: 0,
     });
@@ -121,10 +129,12 @@ test("T20 DAO vote circuit, verifier and paymaster", async (t) => {
   await t.test("verifier accepts the proof and rejects tampering", async () => {
     const verifier = await deploy(artifacts, "DaoVoteVerifier", admin);
     const p = loadProof();
-    assert.equal(p.publicInputs.length, 7);
+    assert.equal(p.publicInputs.length, 9);
+    assert.equal(BigInt(p.publicInputs[5]), BigInt(PAYMASTER), "paymaster is bound");
+    assert.equal(p.publicInputs[8], "1", "support is bound");
     assert.equal(await verify(verifier, p), true, "fixture proof must verify");
 
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < p.publicInputs.length; i++) {
       const bad = { ...p, input: [...p.input] };
       bad.input[i] = bad.input[i] + 1n;
       assert.equal(await verify(verifier, bad), false, `input ${i} must bind`);

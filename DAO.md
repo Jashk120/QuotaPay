@@ -111,10 +111,16 @@ dispose of an asset or change the policy without a tier-2/3 authorization.
 2. The member's client builds a `DaoVote` witness:
    - leaf `Poseidon(secret, dao, chainId)`;
    - vote nullifier `Poseidon(secret, proposalId)`;
-   - session nullifier `Poseidon(secret, proposalId, sessionKey)`.
+   - session nullifier `Poseidon(secret, proposalId, sessionKey, paymaster)`.
+   The public statement is
+   `[root, proposalId, dao, chainId, sessionKey, paymaster, voteNullifier,
+   sessionNullifier, support]`; the circuit constrains `support` to a boolean,
+   so the ballot choice is bound by the proof rather than only by the enclosing
+   transaction signature.
 3. `DaoVotePaymaster.charge` verifies the proof against
-   `DaoCore.proposalSnapshotRoot(proposalId)`, burns the nullifier, records the
-   signed choice and writes `voteConsumed[dao][proposalId][nullifier]`.
+   `DaoCore.proposalSnapshotRoot(proposalId)`, rejects a closed proposal,
+   burns the nullifier, records the signed choice and writes
+   `voteConsumed[dao][proposalId][nullifier]`.
 4. `DaoCore.castVote(proposalId, support, nullifier)` checks `voteConsumed`,
    requires `support` to equal the choice recorded by `charge`, records its own
    nullifier and increments the tally.
@@ -140,11 +146,12 @@ back. The choice cannot be stolen, though, because `charge` stores it and
   `VERIFY(votePaymaster)` -> `SENDER(DaoCore.castVote)`. The fresh EOA is the
   sender and the signature signer, and the proof's session binding.
 
-`DaoVotePaymaster.charge` only verifies the proof and the charged transaction;
+`DaoVotePaymaster.charge` verifies the proof and the charged transaction, but
 it does not inspect the SENDER frames. A member can therefore spend their
-per-proposal sponsorship on an unrelated transaction, and the proof binds the
-DAO rather than the paymaster address, so a rotated paymaster still accepts
-proofs for the same DAO. Both are bounded gas-drain issues, not vote replay.
+per-proposal sponsorship on an unrelated transaction: a bounded gas-drain
+issue, not vote replay. The proof now binds both the DAO and the paymaster
+address (via the session nullifier) and the ballot choice, so a rotated or
+second paymaster rejects old proofs and a relayer cannot flip `support`.
 
 `encodeDaoVoteCharge` and `encodeDaoCastVote` build the two calldata payloads.
 `signFrameTx` and `serializeFrameTx` wrap the existing devnet codec. The ABI
@@ -182,7 +189,8 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
 
 - EIP-8141 / ERC-8421 are drafts; the contracts are not audited.
 - The vote path needs the 500k staked validation budget (the Groth16 verifier is
-  ~258k gas). The agent-action builder currently declares ~165k of validation
+  ~272k gas with the 9 public inputs). The agent-action builder currently
+  declares ~165k of validation
   gas, so it also needs the staked/patched relay; it is not under the stock
   public 100k cap.
 - The Poseidon root is agent-supplied and not verified against the commitment

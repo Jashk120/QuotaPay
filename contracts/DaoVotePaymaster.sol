@@ -10,7 +10,7 @@ interface IDaoVoteVerifier {
         uint256[2] calldata a,
         uint256[2][2] calldata b,
         uint256[2] calldata c,
-        uint256[7] calldata publicInputs
+        uint256[9] calldata publicInputs
     ) external view returns (bool);
 }
 
@@ -163,8 +163,8 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     // ------------------------------------------------------- EIP-8141 frames --
 
     /// DEFAULT (pre_verify) frame. Public inputs, in circuit order:
-    ///   [root, proposalId, dao, chainId, sessionKey,
-    ///    voteNullifier, sessionNullifier]
+    ///   [root, proposalId, dao, chainId, sessionKey, paymaster,
+    ///    voteNullifier, sessionNullifier, support]
     function charge(
         uint256[2] calldata a,
         uint256[2][2] calldata b,
@@ -198,14 +198,16 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
             "insolvent"
         );
 
-        uint256[7] memory publicInputs = [
+        uint256[9] memory publicInputs = [
             uint256(root),
             proposalId,
             uint256(uint160(dao)),
             block.chainid,
             uint256(uint160(sessionKey)),
+            uint256(uint160(address(this))),
             voteNullifier,
-            sessionNullifier
+            sessionNullifier,
+            support ? 1 : 0
         ];
         require(
             IDaoVoteVerifier(verifier).verifyProof(a, b, c, publicInputs),

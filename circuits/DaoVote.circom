@@ -8,8 +8,8 @@ pragma circom 2.0.0;
 //    and this session key is bound to the proof."
 //
 // Public inputs, in order:
-//   root, proposalId, dao, chainId, sessionKey,
-//   voteNullifier, sessionNullifier
+//   root, proposalId, dao, chainId, sessionKey, paymaster,
+//   voteNullifier, sessionNullifier, support
 //
 // Private inputs: secret, Merkle path.
 //
@@ -17,7 +17,9 @@ pragma circom 2.0.0;
 // or chain cannot be replayed in another. `voteNullifier` is burned once per
 // (secret, proposal), which gives one vote per member per proposal without
 // revealing which member. `sessionNullifier` binds the proof to TXPARAM.SENDER
-// and is not stored on-chain.
+// and to the paymaster, so a proof cannot be replayed on a rotated or second
+// paymaster. `support` is bound too, so the signed choice cannot be swapped
+// between `charge` and `castVote`.
 
 include "poseidon.circom";
 include "mux1.circom";
@@ -34,8 +36,10 @@ template DaoVote(depth) {
     signal input dao;
     signal input chainId;
     signal input sessionKey;
+    signal input paymaster;
     signal input voteNullifier;
     signal input sessionNullifier;
+    signal input support;
 
     // Leaf = Poseidon(secret, dao, chainId).
     component leafHash = Poseidon(3);
@@ -49,12 +53,17 @@ template DaoVote(depth) {
     voteHash.inputs[1] <== proposalId;
     voteNullifier === voteHash.out;
 
-    // Session binding: the contract passes TXPARAM.SENDER as sessionKey.
-    component sessionHash = Poseidon(3);
+    // Session + sponsor binding: the contract passes TXPARAM.SENDER as
+    // sessionKey and its own address as paymaster.
+    component sessionHash = Poseidon(4);
     sessionHash.inputs[0] <== secret;
     sessionHash.inputs[1] <== proposalId;
     sessionHash.inputs[2] <== sessionKey;
+    sessionHash.inputs[3] <== paymaster;
     sessionNullifier === sessionHash.out;
+
+    // The ballot choice is public input #9 and must be a boolean.
+    support * (support - 1) === 0;
 
     signal node[depth + 1];
     node[0] <== leafHash.out;
@@ -92,7 +101,9 @@ component main {
         dao,
         chainId,
         sessionKey,
+        paymaster,
         voteNullifier,
-        sessionNullifier
+        sessionNullifier,
+        support
     ]
 } = DaoVote(20);
