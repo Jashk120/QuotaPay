@@ -1,6 +1,15 @@
 import { test, expect } from "@playwright/test";
 
-const routes = ["/", "/pay", "/admin", "/company/new", "/blind"];
+const routes = [
+  "/",
+  "/pay",
+  "/admin",
+  "/company/new",
+  "/blind",
+  "/dao",
+  "/dao/new",
+  "/dao/join/ATLAS-1",
+];
 
 test("no React hydration errors on any route", async ({ page }) => {
   const problems: string[] = [];
