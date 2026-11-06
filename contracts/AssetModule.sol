@@ -53,6 +53,9 @@ contract AssetModule {
         require(token != address(0), "token=0");
         require(unitPrice > 0, "price=0");
         require(cap > 0, "cap=0");
+        // Re-allowlisting would change the token or price under existing
+        // holdings, so an asset id is immutable once created.
+        require(assets[assetId].token == address(0), "asset exists");
         assets[assetId] = Asset({
             token: token,
             unitPrice: unitPrice,
@@ -81,13 +84,17 @@ contract AssetModule {
 
     // ----------------------------------------------------------- acquisition --
 
-    /// Tier-1 acquisition. Reverts above the per-asset cap; the caller routes
-    /// above-cap acquisitions through a tier-3 proposal instead.
+    /// Tier-1 acquisition. `cap` bounds the total position (existing holdings
+    /// plus this purchase), not just the single transaction, so repeated buys
+    /// cannot walk the treasury past the cap.
     function buy(bytes32 assetId, uint256 amount) external onlyDao {
         Asset storage asset = assets[assetId];
         require(asset.allowed, "unknown asset");
         uint256 cost = _cost(asset, amount);
-        require(cost <= asset.cap, "asset cap");
+        require(
+            (holdings[dao][assetId] + amount) * asset.unitPrice <= asset.cap,
+            "asset cap"
+        );
         _pull(assetId, asset, amount, cost);
     }
 
@@ -109,18 +116,19 @@ contract AssetModule {
         uint256 amount,
         uint256 cost
     ) private {
+        holdings[dao][assetId] += amount;
         require(
             IERC20(asset.token).transferFrom(dao, address(this), cost),
             "transfer failed"
         );
-        holdings[dao][assetId] += amount;
         emit Acquired(assetId, amount, cost);
     }
 
     // --------------------------------------------------------------- disposal --
 
     /// Tier-2 disposal, reached only through `DaoCore.disposeAsset` after the
-    /// admin signature is checked. Transfers the held asset to `to`.
+    /// admin signature is checked. The unit price is fixed per asset, so the
+    /// holder receives the same value that acquisition paid in.
     function dispose(bytes32 assetId, uint256 amount, address to) external onlyDao {
         Asset storage asset = assets[assetId];
         require(asset.allowed, "unknown asset");
@@ -128,7 +136,10 @@ contract AssetModule {
         require(amount > 0, "amount=0");
         require(holdings[dao][assetId] >= amount, "holdings");
         holdings[dao][assetId] -= amount;
-        require(IERC20(asset.token).transfer(to, amount), "transfer failed");
+        require(
+            IERC20(asset.token).transfer(to, amount * asset.unitPrice),
+            "transfer failed"
+        );
         emit Disposed(assetId, amount, to);
     }
 }
