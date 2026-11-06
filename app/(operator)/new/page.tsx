@@ -110,12 +110,14 @@ export default function NewDaoPage() {
   const [interpreted, setInterpreted] = useState(false);
   const [configSource, setConfigSource] = useState<string | null>(null);
   const [deploying, setDeploying] = useState(false);
+  const [step, setStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [fundedTreasury, setFundedTreasury] = useState<string | null>(null);
   const [fundingNote, setFundingNote] = useState<string | null>(null);
   const [fundAfterDeploy, setFundAfterDeploy] = useState(true);
+  const [enableSponsorship, setEnableSponsorship] = useState(true);
 
   const factory = config.daoFactoryAddress;
 
@@ -178,6 +180,7 @@ export default function NewDaoPage() {
       return;
     }
     setDeploying(true);
+    setStep("Creating the DAO…");
     try {
       const signerRes = await fetch("/api/dao/agent-signer");
       const signerJson = (await signerRes.json()) as {
@@ -253,7 +256,11 @@ export default function NewDaoPage() {
         );
       }
       setCreated(createdEvent.daoCore);
-      if (config.daoGasPaymaster) {
+
+      // The DAO exists now. Everything below is best-effort setup; the user is
+      // never sent back to the deploy form (which would create a second DAO).
+      if (enableSponsorship && config.daoGasPaymaster) {
+        setStep("Enabling gas sponsorship…");
         try {
           const allowHash = await writeContractAsync({
             address: config.daoGasPaymaster,
@@ -275,13 +282,13 @@ export default function NewDaoPage() {
         config.usdcAddress && isAddressLike(config.usdcAddress)
           ? parseUnits(treasury || "0", config.usdcDecimals)
           : 0n;
-      let funded = true;
       if (
         fundAfterDeploy &&
         treasuryAmount > 0n &&
         config.usdcAddress &&
         isAddressLike(config.usdcAddress)
       ) {
+        setStep("Funding the treasury…");
         const token = config.usdcAddress;
         try {
           const walletBalance = await publicClient.readContract({
@@ -311,22 +318,23 @@ export default function NewDaoPage() {
               : `${treasury} test USDC (devnet faucet)`,
           );
         } catch (cause) {
-          funded = false;
           setFundingNote(
             `Treasury was not funded: ${
               cause instanceof Error ? cause.message : String(cause)
-            }. Transfer USDC to ${createdEvent.daoCore}.`,
+            }. You can transfer USDC to ${createdEvent.daoCore} later.`,
           );
         }
       }
 
-      if (funded) {
-        router.push(`/dao/${createdEvent.daoCore}/chat`);
-      }
+      // Always open the console once the DAO exists — even if the optional
+      // sponsorship or funding step failed.
+      setStep("Opening the console…");
+      router.push(`/dao/${createdEvent.daoCore}/chat`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setDeploying(false);
+      setStep(null);
     }
   }
 
@@ -485,9 +493,26 @@ export default function NewDaoPage() {
             />
             <span>
               Fund the treasury after deploy (devnet faucet mints test USDC; not
-              real value).
+              real value — one extra wallet confirmation).
             </span>
           </label>
+
+          {config.daoGasPaymaster ? (
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={enableSponsorship}
+                onChange={(event) =>
+                  setEnableSponsorship(event.target.checked)
+                }
+                className="mt-0.5"
+              />
+              <span>
+                Enable gas sponsorship after deploy (one extra wallet
+                confirmation; the console can also do this later).
+              </span>
+            </label>
+          ) : null}
 
           <div className="grid gap-2 rounded-xl border border-border/70 bg-white/60 p-3 text-sm">
             <Row label="Factory" value={factory || "not configured"} mono />
@@ -501,18 +526,38 @@ export default function NewDaoPage() {
             </Alert>
           ) : null}
 
-          <Button
-            className="w-full"
-            onClick={() => void deploy()}
-            disabled={deploying || !factory || !name.trim()}
-          >
-            {deploying ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <PenLine className="h-4 w-4" />
-            )}
-            {isConnected ? "Deploy on-chain" : "Connect wallet & deploy"}
-          </Button>
+          {deploying && step ? (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> {step}
+            </p>
+          ) : null}
+
+          {created && !deploying ? (
+            <Button asChild className="w-full">
+              <Link href={`/dao/${created}/chat`}>
+                Open DAO <ArrowLeft className="h-4 w-4 rotate-180" />
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              className="w-full"
+              onClick={() => void deploy()}
+              disabled={
+                deploying || Boolean(created) || !factory || !name.trim()
+              }
+            >
+              {deploying ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PenLine className="h-4 w-4" />
+              )}
+              {deploying
+                ? "Finishing setup…"
+                : isConnected
+                  ? "Deploy on-chain"
+                  : "Connect wallet & deploy"}
+            </Button>
+          )}
 
           {error ? (
             <Alert variant="error" title="Deploy failed">
@@ -541,16 +586,14 @@ export default function NewDaoPage() {
                   </div>
                 ) : null}
                 <div className="text-xs">
-                  {fundingNote
-                    ? "The treasury was not funded, so the console was not opened automatically. "
-                    : "Opening your console… "}
+                  Opening your console…{" "}
                   <Link
                     href={`/dao/${created}/chat`}
                     className="font-medium underline underline-offset-2"
                   >
                     open it now
                   </Link>{" "}
-                  {fundingNote ? "" : "if nothing happens."}
+                  if nothing happens.
                 </div>
               </div>
             </Alert>
