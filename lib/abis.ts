@@ -9,6 +9,25 @@ export const companyFactoryAbi = parseAbi([
   "event CompanyCreated(bytes32 indexed companyId, address indexed admin, address indexed paymaster, address treasury)",
 ]);
 
+export const blindTokenPaymasterAbi = parseAbi([
+  "function charge((address sessionKey, address paymaster, uint256 chainId, uint256 epoch, uint256 maxCost, bytes32 serial, bytes signature) token)",
+  "function verifyToken((address sessionKey, address paymaster, uint256 chainId, uint256 epoch, uint256 maxCost, bytes32 serial, bytes signature) token) view returns (bool)",
+  "function admin() view returns (address)",
+  "function epoch() view returns (uint256)",
+  "function maxSponsorCost() view returns (uint256)",
+  "function redeemedCount() view returns (uint256)",
+  "function usedNullifier(bytes32) view returns (bool)",
+  "function setIssuer(bytes modulus, bytes exponent)",
+  "function setEpoch(uint256 epoch)",
+  "function setMaxSponsorCost(uint256 maxCost)",
+  "function deposit() payable",
+  "function requestWithdrawal(uint256 amount)",
+  "function executeWithdrawal()",
+  "function cancelWithdrawal()",
+  "event TokenRedeemed(bytes32 indexed nullifier, address indexed sessionKey, uint256 maxCost)",
+  "event Charged(bytes32 indexed sigHash, bytes32 indexed nullifier)",
+]);
+
 export const companyPaymasterAbi = parseAbi([
   "function admin() view returns (address)",
   "function treasury() view returns (address)",

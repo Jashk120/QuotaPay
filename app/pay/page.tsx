@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  encodeFunctionData,
   isAddress,
   parseEther,
   parseGwei,
@@ -37,6 +38,9 @@ import { Input } from "@/components/ui/input";
 import { config, isLiveConfigured } from "@/lib/config";
 import { isAuthorized } from "@/lib/contracts";
 import { getActivePaymaster } from "@/lib/demo-store";
+import { blindTokenPaymasterAbi } from "@/lib/abis";
+import { findBlindToken } from "@/lib/blindTokenStore";
+import type { BlindToken } from "@/lib/blindToken";
 import {
   buildSponsoredTransfer,
   getReceipt,
@@ -67,10 +71,19 @@ export default function PayPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [blindToken, setBlindToken] = useState<BlindToken | null>(null);
 
   useEffect(() => {
     setPaymaster(getActivePaymaster());
   }, []);
+
+  useEffect(() => {
+    if (!session || !isAddress(paymaster)) {
+      setBlindToken(null);
+      return;
+    }
+    setBlindToken(findBlindToken(session.address, paymaster));
+  }, [session, paymaster]);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +138,23 @@ export default function PayPage() {
     }
 
     try {
+      const chargeData: Hex | undefined = blindToken
+        ? encodeFunctionData({
+            abi: blindTokenPaymasterAbi,
+            functionName: "charge",
+            args: [
+              {
+                sessionKey: blindToken.sessionKey,
+                paymaster: blindToken.paymaster,
+                chainId: BigInt(blindToken.chainId),
+                epoch: BigInt(blindToken.epoch),
+                maxCost: blindToken.maxCost,
+                serial: blindToken.serial,
+                signature: blindToken.signature,
+              },
+            ],
+          })
+        : undefined;
       const envelope = buildSponsoredTransfer({
         sender: session.address,
         paymaster: paymaster as Address,
@@ -134,6 +164,7 @@ export default function PayPage() {
         chainId: config.chainId,
         maxFeePerGas: parseGwei(maxFeeGwei || "2"),
         maxPriorityFeePerGas: parseGwei(maxFeeGwei || "2"),
+        chargeData,
       });
       const signedEnvelope = signSponsoredTransfer(
         envelope,
@@ -338,6 +369,24 @@ export default function PayPage() {
                   inputMode="decimal"
                 />
               </Field>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Charge mode</span>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant={blindToken ? "success" : "secondary"}
+                  data-testid="charge-mode"
+                >
+                  {blindToken
+                    ? `Blind token · ${shortAddress(blindToken.serial, 6)}`
+                    : "CompanyPaymaster charge()"}
+                </Badge>
+                {!blindToken ? (
+                  <Button asChild size="sm" variant="ghost">
+                    <Link href="/blind">Get a blind token</Link>
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={build} disabled={!session}>

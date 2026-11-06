@@ -132,6 +132,8 @@ export type SponsoredTransferInput = {
   maxFeePerGas: bigint;
   maxPriorityFeePerGas: bigint;
   data?: Hex;
+  /** Calldata for the DEFAULT/pre_verify frame. Defaults to CompanyPaymaster charge(). */
+  chargeData?: Hex;
 };
 
 /**
@@ -167,7 +169,7 @@ export function buildSponsoredTransfer(
         executionGas: 70_000n,
         stateGas: 300_000n,
         value: 0n,
-        data: CHARGE_CALLDATA,
+        data: input.chargeData ?? CHARGE_CALLDATA,
       },
       {
         mode: 1, // VERIFY
