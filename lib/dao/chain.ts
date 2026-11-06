@@ -22,6 +22,7 @@ import type {
   Proposal,
 } from "./types";
 import { readChainlinkUsdcUsd } from "./oracle";
+import { daoNameFromId } from "./factory";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 export const ZERO_HASH = `0x${"0".repeat(64)}` as Hex;
@@ -677,7 +678,10 @@ function proposalStatus(
  * shows the on-chain identifiers instead of inventing labels. Every numeric
  * value, role, cap, vote and event here comes from the contracts or their logs.
  */
-export function snapshotToDaoState(snapshot: ChainSnapshot): DaoState {
+export function snapshotToDaoState(
+  snapshot: ChainSnapshot,
+  nameOverride?: string,
+): DaoState {
   const decimals = snapshot.token.decimals;
 
   const members: Member[] = snapshot.members.map((row) => ({
@@ -742,7 +746,10 @@ export function snapshotToDaoState(snapshot: ChainSnapshot): DaoState {
   return {
     version: 1,
     config: {
-      name: config.daoName || `DAO ${shortHex(snapshot.daoId)}`,
+      name:
+        nameOverride ||
+        daoNameFromId(snapshot.daoId) ||
+        `DAO ${shortHex(snapshot.daoId)}`,
       daoId: snapshot.daoId,
       coreAddress: snapshot.core,
       agentAddress: snapshot.agentAccount,

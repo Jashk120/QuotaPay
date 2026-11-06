@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import type { Address } from "viem";
+import { isAddress, type Address } from "viem";
 import {
   useAccount,
   useSendTransaction,
@@ -38,7 +38,6 @@ import { devnet, publicClient } from "@/lib/contracts";
 import { parsePrompt } from "@/lib/dao/agent.mjs";
 import { daoCoreAbi } from "@/lib/daoAbis.mjs";
 import { money, percent } from "@/lib/dao/format";
-import { daoSlug } from "@/lib/dao/slug";
 import { shortHash, withHashes } from "@/lib/dao/hash";
 import { executeMessage } from "@/lib/dao/executeAuth";
 import {
@@ -48,6 +47,7 @@ import {
   type PreparedCall,
 } from "@/lib/dao/planTx";
 import { useDaoState } from "@/lib/dao/use-dao";
+import { daoSlug } from "@/lib/dao/slug";
 import { useConnectedWallet } from "@/lib/wallet";
 import type {
   ActionType,
@@ -88,8 +88,21 @@ function rid(prefix: string) {
 export default function DaoConsolePage() {
   const params = useParams<{ slug: string }>();
   const param = typeof params.slug === "string" ? params.slug : "";
-  const { state, ready, source, chainError, refreshing, refresh } =
-    useDaoState();
+  const envCore = config.daoCoreAddress;
+  const envId = envCore
+    ? daoSlug(
+        config.daoName || `DAO ${envCore.slice(0, 6)}…${envCore.slice(-4)}`,
+      )
+    : null;
+  const core = isAddress(param) ? param : envId === param ? envCore : null;
+
+  const { state, ready, source, chainError, refreshing, refresh } = useDaoState({
+    coreAddress: core ?? undefined,
+    name:
+      core && envCore && core.toLowerCase() === envCore.toLowerCase()
+        ? config.daoName
+        : undefined,
+  });
   const { sendTransactionAsync } = useSendTransaction();
   const { signMessageAsync } = useSignMessage();
   const { address: walletAddress } = useConnectedWallet();
@@ -108,7 +121,7 @@ export default function DaoConsolePage() {
     call: PreparedCall | null;
   } | null>(null);
 
-  const slug = daoSlug(state.config.name);
+  const slug = param;
   const activeMembers = state.members.filter((member) => member.active);
   const isAdmin =
     Boolean(walletAddress) &&
@@ -414,32 +427,32 @@ export default function DaoConsolePage() {
 
   const usage = percent(state.capUsage.periodSpent, state.config.perPeriodCap);
 
-  if (!ready) {
-    return (
-      <Card className="mx-auto max-w-xl">
-        <CardContent className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
-          <RefreshCw className="h-4 w-4 animate-spin" /> Loading DAO…
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (param !== slug) {
+  if (core === null) {
     return (
       <Card className="mx-auto max-w-xl">
         <CardContent className="space-y-4 p-8 text-center">
           <h1 className="text-xl font-semibold tracking-tight">DAO not found</h1>
           <p className="text-sm text-muted-foreground">
-            This browser only knows <strong>{state.config.name}</strong>.
+            This URL is not a DaoCore address.
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             <Button asChild>
-              <Link href={`/dao/${slug}/chat`}>Open its console</Link>
-            </Button>
-            <Button asChild variant="outline">
               <Link href="/daos">All DAOs</Link>
             </Button>
+            <Button asChild variant="outline">
+              <Link href="/new">Create a DAO</Link>
+            </Button>
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!ready) {
+    return (
+      <Card className="mx-auto max-w-xl">
+        <CardContent className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+          <RefreshCw className="h-4 w-4 animate-spin" /> Loading DAO…
         </CardContent>
       </Card>
     );

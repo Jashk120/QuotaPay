@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Address } from "viem";
-import { config, isDaoChainConfigured } from "@/lib/config";
+import { config } from "@/lib/config";
 import { publicClient } from "@/lib/contracts";
 import { readChainSnapshot, snapshotToDaoState } from "./chain";
 import { emptyDaoState } from "./empty";
@@ -13,16 +13,22 @@ export type DaoSource = "chain" | "unconfigured";
 /**
  * The operator console has exactly one source of truth: the chain.
  *
- * `NEXT_PUBLIC_DAO_CORE` names the DaoCore. Every member, cap, proposal, asset,
- * balance, policy rule and execution event is read from that contract (and its
- * AgentAccount/AssetModule) on each refresh. There is no seed, no localStorage
- * DAO and no simulated execution: if the address is missing or the read fails,
- * the console shows an empty state and an error instead of invented data.
+ * Pass a `coreAddress` to read a specific DAO (the registry entry for
+ * `/dao/<id>/chat`); without it the hook uses `NEXT_PUBLIC_DAO_CORE`. Every
+ * member, cap, proposal, asset, balance, policy rule and execution event is
+ * read from that contract on each refresh. There is no seed, no localStorage
+ * DAO and no simulated execution.
  */
-export function useDaoState() {
-  const chainMode = isDaoChainConfigured;
+export function useDaoState(options?: {
+  coreAddress?: string;
+  name?: string;
+}) {
+  const core = options?.coreAddress || config.daoCoreAddress;
+  const nameOverride =
+    options?.name ?? (options?.coreAddress ? undefined : config.daoName);
+  const chainMode = Boolean(core);
   const [state, setState] = useState<DaoState>(() =>
-    emptyDaoState(chainMode ? config.daoCoreAddress : ""),
+    emptyDaoState(chainMode ? core : ""),
   );
   const [ready, setReady] = useState(!chainMode);
   const [source, setSource] = useState<DaoSource>(
@@ -32,7 +38,7 @@ export function useDaoState() {
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!chainMode) {
+    if (!chainMode || !core) {
       setReady(true);
       return;
     }
@@ -40,9 +46,9 @@ export function useDaoState() {
     try {
       const snapshot = await readChainSnapshot(
         publicClient,
-        config.daoCoreAddress as Address,
+        core as Address,
       );
-      const next = snapshotToDaoState(snapshot);
+      const next = snapshotToDaoState(snapshot, nameOverride);
       setState(next);
       setSource("chain");
       setChainError(
@@ -55,7 +61,7 @@ export function useDaoState() {
       setRefreshing(false);
       setReady(true);
     }
-  }, [chainMode]);
+  }, [chainMode, core, nameOverride]);
 
   useEffect(() => {
     if (!chainMode) {

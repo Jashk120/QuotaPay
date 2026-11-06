@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Check,
@@ -11,11 +12,9 @@ import {
   Wand2,
 } from "lucide-react";
 import {
-  keccak256,
   parseEther,
   parseEventLogs,
   parseUnits,
-  stringToHex,
 } from "viem";
 import { useWriteContract } from "wagmi";
 import { Alert } from "@/components/ui/alert";
@@ -33,13 +32,14 @@ import { Input } from "@/components/ui/input";
 import { config } from "@/lib/config";
 import { publicClient } from "@/lib/contracts";
 import { daoFactoryAbi } from "@/lib/daoAbis.mjs";
-import { daoSlug } from "@/lib/dao/slug";
+import { daoIdFromName } from "@/lib/dao/factory";
 import { useConnectedWallet } from "@/lib/wallet";
 
 const DEFAULT_PROMPT =
   "Invite-only DAO, 5k USDC treasury, auto-approve spends up to $200.";
 
 export default function NewDaoPage() {
+  const router = useRouter();
   const { address, isConnected, connect } = useConnectedWallet();
   const { writeContractAsync } = useWriteContract();
 
@@ -126,8 +126,7 @@ export default function NewDaoPage() {
         throw new Error(signerJson.error ?? "agent signer unavailable");
       }
 
-      const slug = daoSlug(name);
-      const daoId = keccak256(stringToHex(slug));
+      const daoId = daoIdFromName(name);
       const fundingWei = parseEther(funding || "0");
       const tokenCaps =
         config.usdcAddress && isAddressLike(config.usdcAddress)
@@ -175,6 +174,7 @@ export default function NewDaoPage() {
       })[0]?.args;
       if (!createdEvent) throw new Error("DaoCreated event not found");
       setCreated(createdEvent.daoCore);
+      router.push(`/dao/${createdEvent.daoCore}/chat`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
