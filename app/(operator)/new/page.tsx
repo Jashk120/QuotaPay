@@ -116,8 +116,10 @@ export default function NewDaoPage() {
   const [created, setCreated] = useState<string | null>(null);
   const [fundedTreasury, setFundedTreasury] = useState<string | null>(null);
   const [fundingNote, setFundingNote] = useState<string | null>(null);
-  const [fundAfterDeploy, setFundAfterDeploy] = useState(true);
-  const [enableSponsorship, setEnableSponsorship] = useState(true);
+  // Both are deliberately off: creating the DAO must be a single wallet
+  // confirmation. Extra setup is opt-in and can also be done from the console.
+  const [fundAfterDeploy, setFundAfterDeploy] = useState(false);
+  const [enableSponsorship, setEnableSponsorship] = useState(false);
 
   const factory = config.daoFactoryAddress;
 
@@ -492,8 +494,8 @@ export default function NewDaoPage() {
               className="mt-0.5"
             />
             <span>
-              Fund the treasury after deploy (devnet faucet mints test USDC; not
-              real value — one extra wallet confirmation).
+              Optional: fund the treasury after deploy (devnet faucet mints test
+              USDC; adds one extra wallet confirmation).
             </span>
           </label>
 
@@ -508,8 +510,8 @@ export default function NewDaoPage() {
                 className="mt-0.5"
               />
               <span>
-                Enable gas sponsorship after deploy (one extra wallet
-                confirmation; the console can also do this later).
+                Optional: enable gas sponsorship after deploy (adds one extra
+                wallet confirmation; the console can also do this later).
               </span>
             </label>
           ) : null}
