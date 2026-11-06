@@ -361,7 +361,18 @@ export function ZkPaymentPanel({
         }
       }
       setTxHash(hash);
-      const r = await getReceipt(config.rpcUrl, hash, anonFetch);
+      let r = await getReceipt(config.rpcUrl, hash, anonFetch);
+      if (!r) {
+        setStatus("Pending in the mempool, waiting to be mined…");
+        for (let i = 0; i < 20 && !r; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          try {
+            r = await getReceipt(config.rpcUrl, hash, anonFetch);
+          } catch {
+            /* keep polling through transient RPC errors */
+          }
+        }
+      }
       setReceipt(r);
       setStatus(r ? "Mined." : "Pending in the mempool.");
       await refreshState();
