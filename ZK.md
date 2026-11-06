@@ -150,11 +150,20 @@ npm run zk:admin -- stake 0.012 86400
 `paths` prints:
 
 ```json
-[{ "index": 0, "leaf": "…", "root": "…", "pathElements": ["…"], "pathIndices": [0] }]
+[{
+  "index": 0,
+  "leaf": "…",
+  "root": "…",
+  "paymaster": "0x…",
+  "epoch": "0",
+  "chainId": 1337,
+  "pathElements": ["…"],
+  "pathIndices": [0]
+}]
 ```
 
-Send that path to the employee; they combine it with their own secret in the
-`/zk` credential form. Removal sets the slot to `0` instead of splicing, so
+Send that path to the employee; they add only their own `secret` and paste the
+result into the `/zk` credential form. Removal sets the slot to `0` instead of splicing, so
 other employees' indices and paths stay stable until the next root update.
 Changing the root invalidates every outstanding path; redistribute after each
 `add`/`remove`.

@@ -238,6 +238,9 @@ async function paths() {
       index,
       leaf: state.leaves[index].toString(),
       root: root.toString(),
+      paymaster: state.paymaster,
+      epoch: String(state.epoch ?? "0"),
+      chainId: Number(state.chainId ?? CHAIN_ID),
       pathElements: pathElements.map((v) => v.toString()),
       pathIndices,
     });
