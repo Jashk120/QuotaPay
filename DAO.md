@@ -147,9 +147,10 @@ DAO rather than the paymaster address, so a rotated paymaster still accepts
 proofs for the same DAO. Both are bounded gas-drain issues, not vote replay.
 
 `encodeDaoVoteCharge` and `encodeDaoCastVote` build the two calldata payloads.
-`signFrameTx` and `serializeFrameTx` wrap the existing devnet codec. The full
-contract ABI surface (DAO, AgentAccount, AssetModule, factory, both paymasters)
-is in `lib/daoAbis.mjs`.
+`signFrameTx` and `serializeFrameTx` wrap the existing devnet codec. The ABI
+surface used by the off-chain agent and the frame builders (DAO, AgentAccount,
+AssetModule, factory, both paymasters) is in `lib/daoAbis.mjs`; the contracts
+remain the source of truth.
 
 ## Commands
 
