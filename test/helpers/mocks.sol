@@ -161,6 +161,17 @@ contract MockVotePaymaster {
     }
 }
 
+/// Minimal `DaoCore` view stand-in for `DaoGasPaymaster`'s deploy-time cache.
+/// The real paymaster reads `agentAccount()` once in the constructor so the
+/// validation prefix does not perform a non-sender storage read.
+contract MockDaoAgentView {
+    address public agentAccount;
+
+    constructor(address agent_) {
+        agentAccount = agent_;
+    }
+}
+
 /// Minimal `DaoCore` view stand-in for `DaoVotePaymaster.charge` deadline tests.
 contract MockDaoVoteSource {
     bytes32 public root;

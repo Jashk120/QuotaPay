@@ -18,6 +18,10 @@ test("T23 DaoGasPaymaster: config, custody and gates", async (t) => {
   const outsiderAddr = await outsider.getAddress();
 
   const registry = await deploy(artifacts, "MockRegistry", admin);
+  // The paymaster caches DaoCore.agentAccount() at deploy time.
+  const daoView = await deploy(artifacts, "MockDaoAgentView", admin, [
+    await treasury.getAddress(),
+  ]);
   const paymaster = await deploy(
     artifacts,
     "DaoGasPaymaster",
@@ -26,18 +30,20 @@ test("T23 DaoGasPaymaster: config, custody and gates", async (t) => {
       adminAddr,
       treasuryAddr,
       await registry.getAddress(),
-      treasuryAddr, // any DAO address; charge is entrypoint-gated first
+      await daoView.getAddress(),
       1000n,
       0,
     ],
     ethers.parseEther("5")
   );
   const paymasterAddr = await paymaster.getAddress();
+  const daoAddr = await daoView.getAddress();
 
   await t.test("constructor state", async () => {
     assert.equal(await paymaster.admin(), adminAddr);
     assert.equal(await paymaster.treasury(), treasuryAddr);
-    assert.equal(await paymaster.dao(), treasuryAddr);
+    assert.equal(await paymaster.dao(), daoAddr);
+    assert.equal(await paymaster.agentAccount(), treasuryAddr);
     assert.equal(await paymaster.maxSponsorCost(), 1000n);
     assert.equal(await paymaster.chargedCount(), 0n);
     assert.equal(await paymaster.chargedTx(ethers.ZeroHash), false);
