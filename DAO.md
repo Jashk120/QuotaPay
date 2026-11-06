@@ -95,6 +95,23 @@ an asset or change the policy without a tier-2/3 authorization.
 
 A frame tx is atomic, so a failed `castVote` rolls the paymaster burn back.
 
+## Frame builders
+
+`lib/daoFrameTx.mjs` builds both layouts from spec §7:
+
+- `buildAgentActionFrameTx`:
+  `VERIFY(AgentAccount)` -> `DEFAULT(paymaster.charge)` ->
+  `VERIFY(paymaster)` -> one or more `SENDER` calls with `ATOMIC_BATCH` on the
+  first call. `tx.sender` is the `AgentAccount`; the signature entry is the
+  agent EOA.
+- `buildPrivateVoteFrameTx`:
+  `VERIFY(fresh EOA)` -> `DEFAULT(votePaymaster.charge)` ->
+  `VERIFY(votePaymaster)` -> `SENDER(DaoCore.castVote)`. The fresh EOA is the
+  sender and the signature signer, and the proof's session binding.
+
+`encodeDaoVoteCharge` and `encodeDaoCastVote` build the two calldata payloads.
+`signFrameTx` and `serializeFrameTx` wrap the existing devnet codec.
+
 ## Commands
 
 ```powershell
