@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 
 const routes = [
   "/",
+  "/dao/atlas-collective",
+  "/dao/atlas-collective/chat",
   "/new",
   "/join/ATLAS-1",
   "/sponsorship",

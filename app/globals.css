@@ -4,30 +4,31 @@
 
 @layer base {
   :root {
-    --background: 222 47% 5%;
-    --foreground: 210 40% 98%;
-    --card: 222 40% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 40% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 160 84% 45%;
-    --primary-foreground: 162 90% 7%;
-    --secondary: 217 33% 14%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 13%;
-    --muted-foreground: 215 20% 63%;
-    --accent: 217 33% 16%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 160 84% 45%;
-    --success-foreground: 162 90% 7%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 38 92% 8%;
-    --border: 217 33% 15%;
-    --input: 217 33% 15%;
-    --ring: 160 84% 45%;
-    --radius: 0.75rem;
+    /* Warm white / yellow / gray */
+    --background: 48 44% 98%;
+    --foreground: 40 12% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 40 12% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 40 12% 12%;
+    --primary: 45 90% 48%;
+    --primary-foreground: 40 32% 12%;
+    --secondary: 45 24% 94%;
+    --secondary-foreground: 40 12% 20%;
+    --muted: 45 22% 95%;
+    --muted-foreground: 40 7% 44%;
+    --accent: 46 92% 93%;
+    --accent-foreground: 40 30% 14%;
+    --destructive: 40 8% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 45 85% 42%;
+    --success-foreground: 40 32% 12%;
+    --warning: 45 92% 45%;
+    --warning-foreground: 40 32% 12%;
+    --border: 44 18% 88%;
+    --input: 44 18% 85%;
+    --ring: 45 90% 48%;
+    --radius: 0.9rem;
   }
 
   * {
@@ -37,6 +38,7 @@
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
+    background-color: hsl(var(--background));
   }
 
   body {
@@ -46,10 +48,23 @@
       "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     text-rendering: optimizeLegibility;
+    background-image:
+      radial-gradient(
+        ellipse 70% 45% at 50% -8%,
+        hsl(var(--primary) / 0.16),
+        transparent 62%
+      ),
+      radial-gradient(
+        ellipse 45% 35% at 100% 0%,
+        hsl(48 90% 70% / 0.1),
+        transparent 60%
+      ),
+      linear-gradient(180deg, hsl(48 44% 99%), hsl(46 30% 96%) 70%, hsl(45 22% 95%));
+    background-attachment: fixed;
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.28);
+    background: hsl(var(--primary) / 0.35);
     color: hsl(var(--foreground));
   }
 
@@ -73,35 +88,68 @@
     background-clip: content-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.4);
+    background-color: hsl(var(--muted-foreground) / 0.35);
+  }
+}
+
+@layer components {
+  .surface {
+    @apply rounded-xl border border-border/70 bg-card;
+    box-shadow:
+      0 1px 2px hsl(40 30% 20% / 0.04),
+      0 10px 30px -18px hsl(40 30% 20% / 0.22);
   }
 }
 
 @layer utilities {
+  .shadow-soft {
+    box-shadow:
+      0 1px 2px hsl(40 30% 20% / 0.04),
+      0 10px 30px -18px hsl(40 30% 20% / 0.22);
+  }
+
+  .shadow-lift {
+    box-shadow:
+      0 1px 2px hsl(40 30% 20% / 0.05),
+      0 18px 44px -22px hsl(40 30% 20% / 0.3);
+  }
+
   .bg-glow {
     background:
       radial-gradient(
-        ellipse 80% 50% at 50% -10%,
-        hsl(var(--primary) / 0.16),
-        transparent 60%
+        ellipse 70% 45% at 50% -8%,
+        hsl(var(--primary) / 0.14),
+        transparent 62%
       ),
       radial-gradient(
-        ellipse 60% 40% at 90% 0%,
-        hsl(190 90% 45% / 0.08),
-        transparent 55%
+        ellipse 45% 35% at 100% 0%,
+        hsl(48 90% 70% / 0.08),
+        transparent 60%
       );
   }
 
   .bg-grid {
     background-image:
-      linear-gradient(to right, hsl(var(--border) / 0.32) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--border) / 0.32) 1px, transparent 1px);
+      linear-gradient(to right, hsl(44 20% 70% / 0.18) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(44 20% 70% / 0.18) 1px, transparent 1px);
     background-size: 56px 56px;
   }
 
   .bg-grid-mask {
     -webkit-mask-image: radial-gradient(ellipse at center, black, transparent 78%);
     mask-image: radial-gradient(ellipse at center, black, transparent 78%);
+  }
+
+  .text-gradient {
+    background: linear-gradient(
+      100deg,
+      hsl(45 70% 38%),
+      hsl(48 95% 58%) 45%,
+      hsl(40 15% 35%)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .text-balance {

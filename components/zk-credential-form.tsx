@@ -107,7 +107,7 @@ export function ZkCredentialForm({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="rounded-lg border border-border/60 bg-background/50 p-3">
+        <div className="rounded-xl border border-border/70 bg-secondary/30 p-3">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
             Session key (bound into the proof)
           </div>
@@ -134,7 +134,7 @@ export function ZkCredentialForm({
           spellCheck={false}
           rows={9}
           placeholder={'{\n  "secret": "…",\n  "root": "…",\n  "epoch": "0",\n  "paymaster": "0x…",\n  "chainId": 1337,\n  "pathElements": ["… 20 entries …"],\n  "pathIndices": [0, 0, …]\n}'}
-          className="w-full rounded-lg border border-border/60 bg-background/60 p-3 font-mono text-[11px] text-foreground outline-none ring-offset-background placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-full rounded-lg border border-input bg-white p-3 font-mono text-[11px] text-foreground shadow-[inset_0_1px_2px_hsl(40_30%_20%/0.04)] outline-none placeholder:text-muted-foreground/60 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
         />
 
         <div className="flex flex-wrap gap-2">

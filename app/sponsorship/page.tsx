@@ -25,7 +25,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { config, isLiveConfigured } from "@/lib/config";
-import { useRole, type Role } from "@/lib/role";
+
+type Role = "user" | "admin";
 
 const roles = [
   {
@@ -111,8 +112,6 @@ const steps = [
 ];
 
 export default function HomePage() {
-  const { setRole } = useRole();
-
   return (
     <div className="space-y-24">
       <section className="relative pt-6 sm:pt-10">
@@ -122,7 +121,7 @@ export default function HomePage() {
           </Badge>
           <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-6xl">
             Sponsor the transaction,
-            <span className="block bg-gradient-to-r from-primary via-emerald-300 to-teal-200 bg-clip-text text-transparent">
+            <span className="block text-gradient">
               not the wallet.
             </span>
           </h1>
@@ -132,18 +131,13 @@ export default function HomePage() {
             isolated paymaster and a real solvency ledger per company.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button asChild size="lg" onClick={() => setRole("admin")}>
+            <Button asChild size="lg">
               <Link href="/sponsorship/company/new">
                 <Building2 className="h-4 w-4" /> I&apos;m a company admin
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
-            <Button
-              asChild
-              size="lg"
-              variant="outline"
-              onClick={() => setRole("user")}
-            >
+            <Button asChild size="lg" variant="outline">
               <Link href="/sponsorship/register">
                 <UserPlus className="h-4 w-4" /> I&apos;m a beneficiary
               </Link>
@@ -185,8 +179,8 @@ export default function HomePage() {
             >
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 ring-1 ring-primary/25">
-                    <item.icon className="h-5 w-5 text-primary" />
+                  <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/15 ring-1 ring-primary/35">
+                    <item.icon className="h-5 w-5 text-yellow-700" />
                   </div>
                   <span className="font-mono text-3xl font-semibold text-foreground/10">
                     {item.step}
@@ -201,7 +195,6 @@ export default function HomePage() {
                   variant="outline"
                   size="sm"
                   className="w-full"
-                  onClick={() => setRole(item.role)}
                 >
                   <Link href={item.href}>
                     {item.cta} <ArrowRight className="h-3.5 w-3.5" />
@@ -226,8 +219,8 @@ export default function HomePage() {
           {roles.map((role) => (
             <Card key={role.title}>
               <CardHeader>
-                <div className="mb-2 grid h-10 w-10 place-items-center rounded-lg bg-primary/10 ring-1 ring-primary/25">
-                  <role.icon className="h-5 w-5 text-primary" />
+                <div className="mb-2 grid h-10 w-10 place-items-center rounded-lg bg-primary/15 ring-1 ring-primary/35">
+                  <role.icon className="h-5 w-5 text-yellow-700" />
                 </div>
                 <CardTitle>{role.title}</CardTitle>
                 <CardDescription>{role.body}</CardDescription>
@@ -255,8 +248,8 @@ export default function HomePage() {
             <Card key={step.title} className="relative overflow-hidden">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary">
-                    <step.icon className="h-4 w-4 text-foreground/80" />
+                  <div className="grid h-9 w-9 place-items-center rounded-lg bg-secondary ring-1 ring-border/60">
+                    <step.icon className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <Badge variant="secondary" className="font-mono text-[10px]">
                     {step.tag}
@@ -295,7 +288,7 @@ export default function HomePage() {
             ].map((item) => (
               <div
                 key={item}
-                className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/40 p-3 text-sm text-muted-foreground"
+                className="flex items-start gap-2 rounded-xl border border-border/70 bg-secondary/30 p-3 text-sm text-muted-foreground"
               >
                 <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 {item}
@@ -313,20 +306,19 @@ export default function HomePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <Row label="Chain ID" value={String(config.chainId)} />
-            <Row label="RPC" value={config.rpcUrl} mono />
+            <Row
+              label="Network"
+              value={isLiveConfigured ? "configured" : "demo mode"}
+            />
             <Row
               label="Factory"
-              value={
-                isLiveConfigured ? config.factoryAddress : "not configured"
-              }
-              mono
+              value={isLiveConfigured ? "deployed" : "not configured"}
             />
             <Row
               label="Frame submit"
               value={config.submitEnabled ? "enabled" : "disabled"}
             />
-            <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-100">
+            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
               MetaMask cannot send EIP-8141 frame transactions. The pay flow
               uses an in-browser session key as the beneficiary signer and a
               relayer/RPC for submission.

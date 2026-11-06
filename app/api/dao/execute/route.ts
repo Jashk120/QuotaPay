@@ -178,8 +178,10 @@ export async function POST(request: Request) {
         {
           to: to as Address,
           data: data as Hex,
-          executionGas: 350_000n,
-          stateGas: 400_000n,
+          // Admin actions (addMembers/removeMember/setRole) write several
+          // storage slots and do an ECDSA recover; 350k was not enough.
+          executionGas: 900_000n,
+          stateGas: 900_000n,
         },
       ],
     });
@@ -188,11 +190,15 @@ export async function POST(request: Request) {
 
     let hash: Hex;
     try {
-      hash = await sendRawSponsoredTransfer(rpcUrl, signed);
+      // The alt-mempool validates the structured form. Its raw 0x06 envelope
+      // path rejects the same transaction during validation-prefix simulation
+      // (`StorageReadNonSender`), so structured submission is the working path
+      // on this devnet.
+      hash = await sendFrameSponsoredTransfer(rpcUrl, signed);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       if (!/method|not supported|unsupported/i.test(message)) throw cause;
-      hash = await sendFrameSponsoredTransfer(rpcUrl, signed);
+      hash = await sendRawSponsoredTransfer(rpcUrl, signed);
     }
 
     return NextResponse.json({

@@ -156,6 +156,15 @@ export type PolicyRow = {
   tier: Tier;
 };
 
+/** A real price source. No hardcoded or mock values. */
+export type OraclePrice = {
+  source: "chainlink" | "uniswap";
+  usdcUsd: number;
+  updatedAt: number;
+  feed?: string;
+  poolId?: string;
+};
+
 export type DaoState = {
   version: 1;
   config: DaoConfig;
@@ -165,6 +174,7 @@ export type DaoState = {
   assets: DaoAsset[];
   events: DaoEvent[];
   policy: PolicyRow[];
+  oracle?: OraclePrice;
   capUsage: {
     periodSpent: number;
     membersAdded: number;

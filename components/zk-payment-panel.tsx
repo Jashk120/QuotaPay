@@ -407,28 +407,34 @@ export function ZkPaymentPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-2 rounded-lg border border-border/60 bg-background/40 p-3 text-xs sm:grid-cols-2">
-          <StateRow label="Paymaster" value={paymaster ?? "not configured"} />
-          <StateRow
-            label="Contract root"
-            value={root !== null ? shortAddress(root.toString(), 10) : "—"}
-            ok={rootMatches}
-          />
-          <StateRow
-            label="Contract epoch"
-            value={epoch !== null ? epoch.toString() : "—"}
-            ok={epochMatches}
-          />
-          <StateRow
-            label="Max sponsor cost"
-            value={maxSponsorCost !== null ? `${maxSponsorCost} wei` : "—"}
-          />
-          <StateRow
-            label="Identity nullifier spent"
-            value={used === null ? "—" : used ? "yes" : "no"}
-            ok={used === null ? null : !used}
-          />
-        </div>
+        <details className="rounded-xl border border-border/70 bg-secondary/30 p-3 text-xs">
+          <summary className="cursor-pointer text-muted-foreground">
+            Contract state
+            {used ? <span className="ml-2 text-gray-600">credential already used</span> : null}
+          </summary>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <StateRow label="Paymaster" value={paymaster ? "configured" : "not configured"} />
+            <StateRow
+              label="Root"
+              value={root !== null ? shortAddress(root.toString(), 10) : "—"}
+              ok={rootMatches}
+            />
+            <StateRow
+              label="Epoch"
+              value={epoch !== null ? epoch.toString() : "—"}
+              ok={epochMatches}
+            />
+            <StateRow
+              label="Max sponsor cost"
+              value={maxSponsorCost !== null ? `${maxSponsorCost} wei` : "—"}
+            />
+            <StateRow
+              label="Identity nullifier spent"
+              value={used === null ? "—" : used ? "yes" : "no"}
+              ok={used === null ? null : !used}
+            />
+          </div>
+        </details>
 
         {stateError ? <Alert variant="error">{stateError}</Alert> : null}
 
@@ -524,7 +530,7 @@ export function ZkPaymentPanel({
         {proof ? (
           <div
             data-testid="zk-proof"
-            className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs"
+            className="rounded-xl border border-primary/40 bg-primary/5 p-3 text-xs"
           >
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="success">
@@ -543,7 +549,7 @@ export function ZkPaymentPanel({
         {signed ? (
           <div
             data-testid="zk-signed"
-            className="space-y-2 rounded-lg border border-border/60 bg-background/40 p-3 text-xs"
+            className="space-y-2 rounded-xl border border-border/70 bg-secondary/30 p-3 text-xs"
           >
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary" className="font-mono">
@@ -612,9 +618,9 @@ function StateRow({
   return (
     <div className="flex items-center gap-2">
       {ok === null || ok === undefined ? null : ok ? (
-        <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+        <ShieldCheck className="h-3.5 w-3.5 text-yellow-600" />
       ) : (
-        <ShieldX className="h-3.5 w-3.5 text-red-400" />
+        <ShieldX className="h-3.5 w-3.5 text-gray-600" />
       )}
       <span className="text-muted-foreground">{label}:</span>
       <span className="break-all font-mono">{value}</span>

@@ -7,7 +7,7 @@ async function sendPrompt(page: Page, prompt: string) {
 }
 
 test("plans, admin signatures and prompt-injection refusal", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/dao/atlas-collective/chat");
   await expect(
     page.getByRole("heading", { name: /operator console/i }),
   ).toBeVisible();
@@ -45,7 +45,7 @@ test("plans, admin signatures and prompt-injection refusal", async ({ page }) =>
 test("over-cap spend becomes a proposal that can be voted and executed", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/dao/atlas-collective/chat");
 
   const plan = await sendPrompt(page, "$800 spend for the design team");
   await expect(plan).toContainText("Tier 3");
@@ -75,7 +75,7 @@ test("invite acceptance and DAO creation update local state", async ({
   await expect(page.getByTestId("dao-join-success")).toBeVisible();
   await expect(page.getByTestId("dao-join-success")).toContainText("Sofia M.");
 
-  await page.goto("/");
+  await page.goto("/dao/atlas-collective/chat");
   await expect(
     page.getByTestId("dao-member-row").filter({ hasText: "Sofia M." }),
   ).toBeVisible();
@@ -87,8 +87,11 @@ test("invite acceptance and DAO creation update local state", async ({
   // No wallet connected in the test browser: the signature step is skipped.
   const simulate = page.getByTestId("dao-simulate-signature");
   if (await simulate.isVisible().catch(() => false)) await simulate.click();
-  await expect(page).toHaveURL(/\/$/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/dao\/new-collective\/chat$/, {
+    timeout: 20_000,
+  });
   await expect(
     page.getByRole("heading", { name: /New Collective · operator console/i }),
   ).toBeVisible();
 });
+

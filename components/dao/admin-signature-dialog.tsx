@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import type { Address } from "viem";
 import { useSignTypedData } from "wagmi";
-import { Check, Loader2, PenLine, ShieldAlert, Wallet, X } from "lucide-react";
+import { Loader2, PenLine, ShieldAlert, Wallet, X } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { config, isDaoChainConfigured } from "@/lib/config";
+import { config } from "@/lib/config";
 import { shortHash } from "@/lib/dao/hash";
 import { useConnectedWallet } from "@/lib/wallet";
 
@@ -117,14 +117,6 @@ export function AdminSignatureDialog({
     }
   }
 
-  function simulate() {
-    onSigned({
-      signature: `0x${"11".repeat(65)}`,
-      simulated: true,
-      signer: address ?? "0x1111111111111111111111111111111111111111",
-    });
-  }
-
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-[hsl(40_20%_12%/0.28)] p-4 backdrop-blur-sm"
@@ -212,21 +204,13 @@ export function AdminSignatureDialog({
                 <Wallet className="h-4 w-4" /> Connect admin wallet
               </Button>
             )}
-            <Button
-              variant="secondary"
-              onClick={simulate}
-              data-testid="dao-simulate-signature"
-            >
-              <Check className="h-4 w-4" /> Simulate signature (demo)
-            </Button>
           </div>
 
-          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <div className="flex items-start gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              {isDaoChainConfigured
-                ? "DaoCore verifies this signature against its admin key and nonce before the call executes. The simulated option cannot authorize an on-chain write."
-                : "Local simulation: the signature is real EIP-712 typed data, but no contract verifies it until NEXT_PUBLIC_DAO_CORE is set."}
+              DaoCore verifies this signature against its admin key and nonce
+              before the call executes.
             </span>
           </div>
         </CardContent>

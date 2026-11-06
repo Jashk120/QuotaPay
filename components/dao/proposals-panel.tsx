@@ -75,16 +75,13 @@ export function ProposalsPanel({
               return (
                 <div
                   key={proposal.id}
-                  className="space-y-3 rounded-xl border border-border/60 bg-background/40 p-3"
+                  className="space-y-3 rounded-xl border border-border/70 bg-white p-3 shadow-[0_1px_2px_hsl(40_30%_20%/0.03)]"
                   data-testid="dao-proposal"
                   data-proposal-id={proposal.id}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-[10px] text-muted-foreground">
-                          {proposal.id}
-                        </span>
                         <Badge
                           variant={
                             proposal.status === "executed"
@@ -109,8 +106,7 @@ export function ProposalsPanel({
                       </div>
                       <div className="text-sm font-medium">{proposal.title}</div>
                       <div className="text-[10px] text-muted-foreground">
-                        created {utcDate(proposal.createdAt)} · ends{" "}
-                        {utcDate(proposal.endsAt)} · quorum {proposal.quorum}
+                        Ends {utcDate(proposal.endsAt)}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -159,7 +155,7 @@ export function ProposalsPanel({
                         }}
                       />
                       <div
-                        className="h-full bg-red-400/80"
+                        className="h-full bg-gray-400/80"
                         style={{
                           width: `${total ? (proposal.no / total) * 100 : 0}%`,
                         }}
@@ -172,10 +168,7 @@ export function ProposalsPanel({
                       />
                     </div>
                     <div className="flex flex-wrap justify-between gap-2 text-[10px] text-muted-foreground">
-                      <span>
-                        for {proposal.yes} · against {proposal.no} · abstain{" "}
-                        {proposal.abstain}
-                      </span>
+                      <span>for / against / abstain</span>
                       <span>{total} vote{total === 1 ? "" : "s"} cast</span>
                     </div>
                   </div>
@@ -188,7 +181,7 @@ export function ProposalsPanel({
                     />
                   ) : null}
 
-                  <details className="rounded-lg border border-border/50 bg-background/40 p-2.5">
+                  <details className="rounded-xl border border-border/70 bg-secondary/30 p-2.5">
                     <summary className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
                       <FileText className="h-3 w-3" /> Proposal payload
                     </summary>
@@ -203,7 +196,7 @@ export function ProposalsPanel({
                   </details>
 
                   {proposal.status === "executed" ? (
-                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-300">
+                    <div className="flex items-center gap-1.5 text-[10px] text-yellow-700">
                       <CheckCircle2 className="h-3 w-3" /> Executed after the vote
                       (simulated).
                     </div>
@@ -215,7 +208,7 @@ export function ProposalsPanel({
         </CardContent>
       </Card>
 
-      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 text-xs text-muted-foreground">
+      <div className="rounded-xl border border-border/70 bg-secondary/40 p-3 text-xs text-muted-foreground">
         <div className="flex items-start gap-2">
           <Vote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
           <p>

@@ -404,26 +404,16 @@ export default function AdminPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Stat
-          label="Credits / tx"
-          value={totals.creditPerTx.toString()}
-          hint="business units"
+          label="Available gas budget"
+          value={`${formatEth(totals.available)} ETH`}
+          hint="excludes pending withdrawals"
         />
         <Stat
           label="Company spend"
           value={`${totals.spent.toString()} / ${totals.globalLimit.toString()}`}
           hint="credits this period"
-        />
-        <Stat
-          label="Available ETH"
-          value={`${formatEth(totals.available)} ETH`}
-          hint="excludes pending withdrawals"
-        />
-        <Stat
-          label="Pending withdrawals"
-          value={`${formatEth(totals.pending)} ETH`}
-          hint="reserved"
         />
       </div>
 
@@ -834,25 +824,31 @@ export default function AdminPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <Row label="Admin" value={snapshot?.admin ?? admin ?? "—"} mono />
-            <Row
-              label="Treasury"
-              value={snapshot?.treasury ?? company?.treasury ?? "—"}
-              mono
-            />
-            <Row
-              label="Max sponsor cost"
-              value={`${formatEth(snapshot?.maxSponsorCost ?? (company ? BigInt(company.maxSponsorCost) : 0n))} ETH`}
-            />
-            <Row
-              label="Company ID"
-              value={companyId || "—"}
-            />
-            <Row
-              label="Explorer"
-              value={`${config.explorerUrl.replace(/\/$/, "")}`}
-              mono
-            />
+            <Row label="Company ID" value={companyId || "—"} />
+            <Row label="Admin" value={admin ? "connected" : "not connected"} />
+            <Row label="Paymaster" value={live ? "live" : "demo mode"} />
+            <details className="text-sm">
+              <summary className="cursor-pointer py-1 text-xs text-muted-foreground">
+                Technical snapshot
+              </summary>
+              <div className="mt-2 space-y-2">
+                <Row label="Admin address" value={snapshot?.admin ?? admin ?? "—"} mono />
+                <Row
+                  label="Treasury"
+                  value={snapshot?.treasury ?? company?.treasury ?? "—"}
+                  mono
+                />
+                <Row
+                  label="Max sponsor cost"
+                  value={`${formatEth(snapshot?.maxSponsorCost ?? (company ? BigInt(company.maxSponsorCost) : 0n))} ETH`}
+                />
+                <Row
+                  label="Explorer"
+                  value={`${config.explorerUrl.replace(/\/$/, "")}`}
+                  mono
+                />
+              </div>
+            </details>
             {company ? (
               <div className="pt-2">
                 <Button asChild size="sm" variant="outline">
@@ -879,12 +875,12 @@ function Stat({
   hint: string;
 }) {
   return (
-    <Card>
+    <Card className="bg-gradient-to-br from-white to-[hsl(46_60%_97%)]">
       <CardContent className="p-4">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
           {label}
         </div>
-        <div className="mt-1 text-xl font-semibold tracking-tight">{value}</div>
+        <div className="mt-1.5 text-xl font-semibold tracking-tight">{value}</div>
         <div className="text-xs text-muted-foreground">{hint}</div>
       </CardContent>
     </Card>

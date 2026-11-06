@@ -459,7 +459,7 @@ function Info({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+    <div className="rounded-xl border border-border/70 bg-secondary/30 p-3">
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>

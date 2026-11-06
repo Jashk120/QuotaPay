@@ -96,7 +96,13 @@ async function sendLegacy(account, { to, value = 0n, data = "0x", gas }) {
     };
     if (to) estimateParams.to = to;
     const estimate = await rpc("eth_estimateGas", [estimateParams]);
-    gasToUse = (BigInt(estimate) * 12n) / 10n;
+    // A flat 1.2x multiplier can exceed the devnet's 60M block gas limit for
+    // large deploys (createDao deploys three contracts). Use +5% and cap at the
+    // block limit.
+    const estimateBig = BigInt(estimate);
+    gasToUse = estimateBig + estimateBig / 20n;
+    if (gasToUse > 59_000_000n) gasToUse = 59_000_000n;
+    if (gasToUse < estimateBig) gasToUse = estimateBig;
   }
 
   const raw = await account.signTransaction({

@@ -45,7 +45,7 @@ export function PrivateVotePanel({
   const stageIndex = STAGES.findIndex((item) => item.id === stage);
 
   return (
-    <Card className="border-primary/25 bg-primary/5">
+    <Card className="border-primary/40 bg-primary/5">
       <CardContent className="space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -109,7 +109,7 @@ export function PrivateVotePanel({
         ) : null}
 
         {stage === "done" ? (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
             <span>
               Vote recorded for <strong>{choice}</strong> (simulated proof).
             </span>

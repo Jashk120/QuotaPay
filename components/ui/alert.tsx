@@ -3,10 +3,10 @@ import { AlertCircle, CheckCircle2, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const styles = {
-  info: "border-sky-500/30 bg-sky-500/10 text-sky-100",
-  success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-100",
-  error: "border-red-500/30 bg-red-500/10 text-red-100",
-  warning: "border-amber-500/30 bg-amber-500/10 text-amber-100",
+  info: "border-gray-200 bg-gray-50/80 text-gray-800",
+  success: "border-yellow-200 bg-yellow-50/80 text-yellow-800",
+  error: "border-gray-200 bg-gray-50/80 text-gray-800",
+  warning: "border-yellow-200 bg-yellow-50/90 text-yellow-900",
 } as const;
 
 const icons = {
@@ -31,7 +31,7 @@ export function Alert({
   return (
     <div
       className={cn(
-        "flex gap-3 rounded-lg border p-4 text-sm",
+        "flex gap-3 rounded-xl border p-4 text-sm shadow-[0_1px_2px_hsl(40_30%_20%/0.03)]",
         styles[variant],
         className,
       )}

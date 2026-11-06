@@ -36,7 +36,7 @@ export function AssetsPanel({
           {state.assets.map((asset) => (
             <div
               key={asset.id}
-              className="rounded-lg border border-border/60 bg-background/40 p-3"
+              className="rounded-xl border border-border/70 bg-white p-3 shadow-[0_1px_2px_hsl(40_30%_20%/0.03)]"
               data-testid="dao-asset"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -59,8 +59,7 @@ export function AssetsPanel({
                     ) : null}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    price {money(asset.priceUsdc)} · per-asset cap{" "}
-                    {money(asset.capUsdc)}
+                    price {money(asset.priceUsdc)} USDC
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -119,7 +118,7 @@ export function AssetsPanel({
         />
       </div>
 
-      <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 text-xs text-muted-foreground">
+      <div className="rounded-xl border border-border/70 bg-secondary/40 p-3 text-xs text-muted-foreground">
         Payouts, recipients and asset holdings are public. Privacy in this design
         covers votes only, and only against chain observers.
       </div>
@@ -140,13 +139,13 @@ function Note({
     <div
       className={
         variant === "success"
-          ? "rounded-lg border border-emerald-500/25 bg-emerald-500/10 p-3"
+          ? "rounded-xl border border-yellow-200 bg-yellow-50/80 p-3 text-yellow-900"
           : variant === "warning"
-            ? "rounded-lg border border-amber-500/25 bg-amber-500/10 p-3"
-            : "rounded-lg border border-violet-500/25 bg-violet-500/10 p-3"
+            ? "rounded-xl border border-yellow-200 bg-yellow-50/90 p-3 text-yellow-900"
+            : "rounded-xl border border-yellow-200 bg-yellow-50/80 p-3 text-yellow-900"
       }
     >
-      <div className="text-[10px] uppercase tracking-widest opacity-80">
+      <div className="text-[10px] uppercase tracking-widest opacity-70">
         {title}
       </div>
       <div className="mt-1 text-xs opacity-90">{body}</div>

@@ -31,7 +31,7 @@ export function TierBadge({
       <Badge
         variant="outline"
         className={cn(
-          "border-violet-500/30 bg-violet-500/10 text-violet-300",
+          "border-yellow-300 bg-yellow-50 text-yellow-700",
           className,
         )}
       >

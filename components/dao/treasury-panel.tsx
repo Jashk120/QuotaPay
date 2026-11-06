@@ -1,8 +1,7 @@
 "use client";
 
-import { Coins, Gauge, Send, Wallet } from "lucide-react";
+import { Coins, Gauge, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,17 +10,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { money, percent, utcDateTime } from "@/lib/dao/format";
-import { shortHash } from "@/lib/dao/hash";
 import { TierBadge } from "@/components/dao/tier-badge";
 import type { DaoState } from "@/lib/dao/types";
 
-export function TreasuryPanel({
-  state,
-  onPrompt,
-}: {
-  state: DaoState;
-  onPrompt: (text: string) => void;
-}) {
+export function TreasuryPanel({ state }: { state: DaoState }) {
   const used = state.capUsage.periodSpent;
   const cap = state.config.perPeriodCap;
   const usage = percent(used, cap);
@@ -34,13 +26,13 @@ export function TreasuryPanel({
           icon={<Wallet className="h-4 w-4" />}
           label="Treasury"
           value={`${money(state.config.treasuryUsdc)} USDC`}
-          hint="gas budget tracked separately"
+          hint="DAO-owned funds"
         />
         <Stat
           icon={<Gauge className="h-4 w-4" />}
           label="Per-transaction cap"
-          value={money(state.config.perTxCap)}
-          hint="above this becomes tier 3"
+          value={`${money(state.config.perTxCap)} USDC`}
+          hint="above this becomes a vote"
         />
       </div>
 
@@ -56,20 +48,20 @@ export function TreasuryPanel({
         <CardContent className="space-y-3">
           <div className="flex items-end justify-between gap-3">
             <span className="text-2xl font-semibold tracking-tight">
-              {money(used)}
+              {usage}%
             </span>
-            <span className="text-xs text-muted-foreground">of {money(cap)}</span>
+            <span className="text-xs text-muted-foreground">of the period cap</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-secondary">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-300 transition-all"
+              className="h-full rounded-full bg-gradient-to-r from-[hsl(45_96%_55%)] to-[hsl(36_92%_52%)] shadow-[0_0_12px_hsl(42_90%_50%/0.5)] transition-all"
               style={{ width: `${usage}%` }}
             />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span>{usage}% of the period cap used</span>
+            <span>Re-checked inside DaoCore</span>
             <Badge variant="outline">
-              headroom {money(Math.max(0, cap - used))}
+              {cap > used ? "headroom available" : "cap reached"}
             </Badge>
           </div>
         </CardContent>
@@ -77,31 +69,12 @@ export function TreasuryPanel({
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Try a payout</CardTitle>
+          <CardTitle className="text-base">Payouts</CardTitle>
           <CardDescription>
-            A small payout executes at tier 1. One above a cap flips the same
-            plan to a governance proposal.
+            A payout needs an on-chain recipient. Ask the agent: “pay 10 USDC to
+            0x…”. An amount above the per-tx cap becomes a governance proposal.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => onPrompt("Pay October contributors $150")}>
-            <Send className="h-3.5 w-3.5" /> Pay $150
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onPrompt("$800 spend for the design team")}
-          >
-            <Send className="h-3.5 w-3.5" /> Spend $800
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onPrompt("Pay contributors $50")}
-          >
-            Pay $50
-          </Button>
-        </CardContent>
       </Card>
 
       <Card>
@@ -118,23 +91,15 @@ export function TreasuryPanel({
             payouts.map((event) => (
               <div
                 key={event.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-white px-3 py-2 shadow-[0_1px_2px_hsl(40_30%_20%/0.03)]"
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{event.title}</div>
                   <div className="text-[10px] text-muted-foreground">
-                    {utcDateTime(event.at)} · {event.authorizers.join(", ")}
+                    {utcDateTime(event.at)}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <TierBadge tier={event.tier} />
-                  <span
-                    className="font-mono text-[10px] text-muted-foreground"
-                    title={event.txHash}
-                  >
-                    {shortHash(event.txHash, 8, 4)}
-                  </span>
-                </div>
+                <TierBadge tier={event.tier} />
               </div>
             ))
           )}

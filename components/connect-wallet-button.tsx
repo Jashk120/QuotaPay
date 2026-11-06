@@ -59,7 +59,7 @@ export function ConnectWalletButton() {
             type="button"
             onClick={openAccountModal}
           >
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="h-2 w-2 rounded-full bg-yellow-500" />
             {account.displayName}
           </Button>
         );

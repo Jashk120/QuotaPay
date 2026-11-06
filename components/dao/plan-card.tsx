@@ -15,7 +15,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TierBadge } from "@/components/dao/tier-badge";
-import { shortHash } from "@/lib/dao/hash";
 import type { Plan } from "@/lib/dao/types";
 
 export function PlanCard({
@@ -41,7 +40,7 @@ export function PlanCard({
 
   return (
     <Card
-      className="overflow-hidden border-border/80 bg-card/90"
+      className="overflow-hidden border-border/80 bg-gradient-to-b from-white to-[hsl(46_50%_98%)]"
       data-testid="dao-plan"
       data-plan-action={plan.action}
       data-plan-tier={plan.tier}
@@ -65,9 +64,6 @@ export function PlanCard({
             </div>
             <CardTitle className="text-base">{plan.title}</CardTitle>
           </div>
-          <span className="font-mono text-[10px] text-muted-foreground">
-            {plan.id}
-          </span>
         </div>
         <p className="text-sm text-muted-foreground">{plan.summary}</p>
       </CardHeader>
@@ -80,7 +76,7 @@ export function PlanCard({
               {plan.resolved.map((entity, index) => (
                 <div
                   key={`${entity.label}-${index}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-white px-3 py-2 text-sm"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-medium">{entity.label}</div>
@@ -91,9 +87,9 @@ export function PlanCard({
                     ) : null}
                   </div>
                   {entity.address ? (
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      {shortHash(entity.address, 6, 4)}
-                    </span>
+                    <Badge variant="outline" className="text-[10px]">
+                      resolved
+                    </Badge>
                   ) : (
                     <Badge variant="outline" className="text-[10px]">
                       {entity.kind}
@@ -118,7 +114,7 @@ export function PlanCard({
                   {check.ok ? (
                     <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                   ) : (
-                    <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-yellow-600" />
                   )}
                   <span className="w-40 shrink-0 text-muted-foreground">
                     {check.label}
@@ -152,11 +148,11 @@ export function PlanCard({
         ) : null}
 
         {plan.warnings.length > 0 ? (
-          <div className="space-y-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3">
+          <div className="space-y-1.5 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
             {plan.warnings.map((warning) => (
               <div
                 key={warning}
-                className="flex items-start gap-2 text-xs text-amber-100"
+                className="flex items-start gap-2 text-xs text-yellow-900"
               >
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {warning}
@@ -166,18 +162,15 @@ export function PlanCard({
         ) : null}
 
         {plan.status === "executed" && plan.txHash ? (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
             <span className="inline-flex items-center gap-1.5">
               <Check className="h-3.5 w-3.5" /> Executed (simulated)
-            </span>
-            <span className="font-mono" title={plan.txHash}>
-              {shortHash(plan.txHash, 10, 6)}
             </span>
           </div>
         ) : null}
 
         {blocking.length > 0 ? (
-          <div className="flex items-start gap-2 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs text-red-100">
+          <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-800">
             <CircleSlash className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             Blocked by {blocking.length} failed pre-check
             {blocking.length === 1 ? "" : "s"}. The agent will not submit this.
@@ -226,7 +219,7 @@ export function PlanCard({
           ) : null}
         </div>
 
-        <details className="rounded-lg border border-border/60 bg-background/40 p-3">
+        <details className="rounded-xl border border-border/70 bg-secondary/30 p-3">
           <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
             <FileCode2 className="h-3.5 w-3.5" /> Typed action
           </summary>

@@ -17,7 +17,6 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TierBadge } from "@/components/dao/tier-badge";
 import { utcDateTime } from "@/lib/dao/format";
-import { shortHash } from "@/lib/dao/hash";
 import type { ActionType, DaoState } from "@/lib/dao/types";
 
 const ICONS: Record<ActionType, typeof Activity> = {
@@ -43,8 +42,7 @@ export function ActivityFeed({ state }: { state: DaoState }) {
           <Activity className="h-4 w-4 text-primary" /> Audit log
         </CardTitle>
         <CardDescription>
-          Every executed action records the tier, authorizers, promptHash,
-          planHash and transaction hash.
+          Every executed action records its tier, authorizers and timestamp.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-1">
@@ -77,17 +75,6 @@ export function ActivityFeed({ state }: { state: DaoState }) {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
                     <span>{utcDateTime(event.at)}</span>
                     <span>by {event.authorizers.join(", ")}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-muted-foreground">
-                    <span title={event.txHash}>
-                      tx {shortHash(event.txHash, 10, 6)}
-                    </span>
-                    <span title={event.promptHash}>
-                      prompt {shortHash(event.promptHash, 8, 4)}
-                    </span>
-                    <span title={event.planHash}>
-                      plan {shortHash(event.planHash, 8, 4)}
-                    </span>
                   </div>
                 </div>
               </div>

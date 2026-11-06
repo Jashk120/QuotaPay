@@ -34,16 +34,16 @@ export function SessionWalletCard({
   }
 
   return (
-    <Card className="border-primary/30 bg-primary/[0.04]">
+    <Card className="border-primary/40 bg-gradient-to-br from-primary/[0.08] via-white to-white">
       <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 ring-1 ring-primary/30">
-            <Wallet className="h-5 w-5 text-primary" />
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gradient-to-b from-[hsl(45_96%_60%)] to-[hsl(42_95%_49%)] ring-1 ring-[hsl(40_80%_55%/0.5)]">
+            <Wallet className="h-5 w-5 text-primary-foreground" />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium">Embedded EIP-8141 wallet</span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+              <span className="inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2 py-0.5 text-[10px] font-medium text-yellow-700 ring-1 ring-yellow-600/20">
                 <ShieldCheck className="h-3 w-3" /> ready
               </span>
             </div>

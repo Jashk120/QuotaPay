@@ -35,15 +35,27 @@ export const config = {
     "https://ethereum-rpc.publicnode.com",
 
   // ---- DAO operator (on-chain mode) -------------------------------------
-  // Set NEXT_PUBLIC_DAO_CORE to the deployed DaoCore and the console reads
-  // its state from the chain instead of localStorage. Without it the console
-  // falls back to the local simulation.
+  // Set NEXT_PUBLIC_DAO_CORE to the deployed DaoCore. The console reads every
+  // member, cap, proposal, asset, balance and event from the chain. Without it
+  // the console shows an empty "not configured" state — never local data.
   daoCoreAddress: (process.env.NEXT_PUBLIC_DAO_CORE ?? "") as
+    | `0x${string}`
+    | "",
+  daoFactoryAddress: (process.env.NEXT_PUBLIC_DAO_FACTORY ?? "") as
     | `0x${string}`
     | "",
   daoGasPaymaster: (process.env.NEXT_PUBLIC_DAO_GAS_PAYMASTER ?? "") as
     | `0x${string}`
     | "",
+  /** Optional Chainlink USDC/USD aggregator. Display only. */
+  chainlinkUsdcUsd: (process.env.NEXT_PUBLIC_CHAINLINK_USDC_USD ?? "") as
+    | `0x${string}`
+    | "",
+  /** Optional Uniswap v4 StateView + pool id. Display only. */
+  daoStateView: (process.env.NEXT_PUBLIC_DAO_STATE_VIEW ?? "") as
+    | `0x${string}`
+    | "",
+  daoPoolId: (process.env.NEXT_PUBLIC_DAO_POOL_ID ?? "") as `0x${string}` | "",
   daoName: process.env.NEXT_PUBLIC_DAO_NAME ?? "",
   usdcAddress: (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "") as
     | `0x${string}`

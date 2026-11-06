@@ -19,6 +19,9 @@ interface IDaoAgentView {
 /// decides who pays. Funding and withdrawals are admin-controlled.
 contract DaoGasPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     address public immutable dao;
+    /// Cached at deploy time. `charge()` runs in the validation prefix, where
+    /// reading `DaoCore` storage is a non-sender read; an immutable avoids it.
+    address public immutable agentAccount;
     address public immutable registry;
     address public admin;
     address public treasury;
@@ -70,6 +73,7 @@ contract DaoGasPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         treasury = treasury_;
         registry = registry_;
         dao = dao_;
+        agentAccount = IDaoAgentView(dao_).agentAccount();
         maxSponsorCost = maxSponsorCost_;
         withdrawalDelay = withdrawalDelay_;
     }
@@ -134,9 +138,8 @@ contract DaoGasPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     /// DEFAULT (pre_verify) frame.
     function charge() external {
         require(msg.sender == address(0xaa), "not entrypoint");
-        address agent = IDaoAgentView(dao).agentAccount();
         require(
-            address(uint160(txparam(TxParam.SENDER))) == agent,
+            address(uint160(txparam(TxParam.SENDER))) == agentAccount,
             "not agent"
         );
 
@@ -153,7 +156,7 @@ contract DaoGasPaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         require(!chargedTx[sigHash], "already charged");
         chargedTx[sigHash] = true;
         chargedCount += 1;
-        emit Charged(sigHash, agent, maxCost);
+        emit Charged(sigHash, agentAccount, maxCost);
     }
 
     /// Empty calldata is overloaded:

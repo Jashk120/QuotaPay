@@ -17,12 +17,12 @@ import { PlanCard } from "@/components/dao/plan-card";
 import type { ChatItem, Plan } from "@/lib/dao/types";
 
 const SUGGESTIONS = [
-  "Invite Priya and Marco",
-  "Pay October contributors $150",
-  "$800 spend for the design team",
-  "Remove Arjun",
-  "Buy the invoice NFT for 800 USDC",
+  "Add members Alice and Bob",
+  "Raise the period cap to 2500",
   "Pause the agent",
+  "Buy the asset for 800 USDC",
+  "Build a sponsored deploy frame transaction",
+  "Summarize the DAO",
 ];
 
 const ATTACK_PROMPT =
@@ -65,8 +65,8 @@ export function AgentChat({
     <Card className="flex h-[calc(100vh-13rem)] min-h-[560px] flex-col overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/60 p-4">
         <div className="flex items-center gap-2.5">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 ring-1 ring-primary/30">
-            <Bot className="h-4 w-4 text-primary" />
+          <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-b from-[hsl(45_96%_60%)] to-[hsl(42_95%_49%)] ring-1 ring-[hsl(40_80%_55%/0.5)]">
+            <Bot className="h-4 w-4 text-primary-foreground" />
           </div>
           <div>
             <CardTitle className="text-sm">Operator agent</CardTitle>
@@ -83,14 +83,14 @@ export function AgentChat({
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-4">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           {items.length === 0 ? (
-            <div className="space-y-3 rounded-xl border border-dashed border-border/70 bg-background/30 p-4">
+            <div className="space-y-3 rounded-xl border border-dashed border-primary/40 bg-primary/[0.06] p-4">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Sparkles className="h-4 w-4 text-primary" />
                 Try an operator prompt
               </div>
               <p className="text-xs text-muted-foreground">
-                The parser is deterministic in this UI-only build, so the demo
-                prompts are stable. Nothing is sent to an LLM.
+                Prompts go to the live LLM with a deterministic fallback and come
+                back as a typed plan. Nothing executes until you authorize it.
               </p>
               <div className="flex flex-wrap gap-2">
                 {SUGGESTIONS.map((suggestion) => (
@@ -111,7 +111,7 @@ export function AgentChat({
             if (item.role === "user") {
               return (
                 <div key={item.id} className="flex justify-end gap-2">
-                  <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary/15 px-3.5 py-2.5 text-sm text-foreground ring-1 ring-primary/25">
+                  <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-primary/15 px-3.5 py-2.5 text-sm text-foreground ring-1 ring-primary/30">
                     {item.text}
                   </div>
                   <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-secondary">
@@ -168,7 +168,7 @@ export function AgentChat({
           <div ref={bottomRef} />
         </div>
 
-        <div className="rounded-xl border border-border/70 bg-background/50 p-2">
+        <div className="rounded-xl border border-border/70 bg-white p-2 shadow-[inset_0_1px_2px_hsl(40_30%_20%/0.03)] focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-ring/20">
           <div className="flex items-end gap-2">
             <textarea
               value={value}
@@ -205,7 +205,7 @@ export function AgentChat({
                 type="button"
                 onClick={() => onSend(ATTACK_PROMPT)}
                 data-testid="dao-attack"
-                className="inline-flex items-center gap-1 rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-red-300 transition-colors hover:border-red-500/40"
+                className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-gray-700 transition-colors hover:border-gray-300"
                 title="Send a simulated prompt-injection attempt"
               >
                 <ShieldAlert className="h-3 w-3" /> injection test

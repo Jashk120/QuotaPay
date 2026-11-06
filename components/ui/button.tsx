@@ -9,15 +9,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-[0_0_0_1px_hsl(var(--primary)/0.25)_inset,0_0_30px_-10px_hsl(var(--primary)/0.8)] hover:brightness-110",
+          "bg-gradient-to-b from-[hsl(45_96%_58%)] to-[hsl(42_95%_48%)] text-primary-foreground shadow-[0_1px_1px_hsl(40_40%_25%/0.12),0_8px_18px_-8px_hsl(42_90%_45%/0.55)] ring-1 ring-[hsl(40_80%_55%/0.5)] hover:from-[hsl(45_96%_62%)] hover:to-[hsl(42_95%_51%)] hover:shadow-[0_2px_3px_hsl(40_40%_25%/0.12),0_12px_24px_-10px_hsl(42_90%_45%/0.6)]",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-secondary text-secondary-foreground ring-1 ring-border/70 hover:bg-[hsl(45_24%_91%)]",
         outline:
-          "border border-border bg-transparent hover:bg-accent hover:text-accent-foreground",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+          "border border-border bg-white/70 text-foreground shadow-sm hover:border-primary/50 hover:bg-accent hover:text-accent-foreground",
+        ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
         destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        link: "text-yellow-700 underline-offset-4 hover:underline",
       },
       size: {
         default: "h-10 px-4 py-2",

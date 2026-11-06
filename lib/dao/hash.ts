@@ -21,12 +21,6 @@ export function withHashes(prompt: string, plan: Plan): Plan {
   return { ...plan, promptHash, planHash };
 }
 
-export function fakeTxHash(seed: string): `0x${string}` {
-  return keccak256(
-    toHex(`${seed}:${Date.now()}:${Math.random().toString(36).slice(2)}`),
-  );
-}
-
 export function shortHash(value: string, head = 10, tail = 6): string {
   if (!value || value.length <= head + tail + 2) return value;
   return `${value.slice(0, head)}…${value.slice(-tail)}`;

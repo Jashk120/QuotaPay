@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import type { Address } from "viem";
 import { useSendTransaction, useSignMessage } from "wagmi";
 import {
@@ -9,8 +10,6 @@ import {
   Coins,
   Plus,
   RefreshCw,
-  RotateCcw,
-  ScrollText,
   ShieldCheck,
   Users,
   Vote,
@@ -19,7 +18,6 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ActivityFeed } from "@/components/dao/activity-feed";
 import { AdminSignatureDialog, type SignatureRequest } from "@/components/dao/admin-signature-dialog";
 import { AgentChat } from "@/components/dao/agent-chat";
 import { AssetsPanel } from "@/components/dao/assets-panel";
@@ -27,15 +25,15 @@ import { MembersPanel } from "@/components/dao/members-panel";
 import { PolicyTable } from "@/components/dao/policy-table";
 import { ProposalsPanel } from "@/components/dao/proposals-panel";
 import { TierBadge } from "@/components/dao/tier-badge";
+import { TransactionFeed } from "@/components/dao/transaction-feed";
 import { TreasuryPanel } from "@/components/dao/treasury-panel";
-import type { VoteChoice } from "@/components/dao/private-vote-panel";
 import { isDaoChainConfigured } from "@/lib/config";
 import { publicClient } from "@/lib/contracts";
 import { parsePrompt } from "@/lib/dao/agent.mjs";
 import { daoCoreAbi } from "@/lib/daoAbis.mjs";
 import { money, percent } from "@/lib/dao/format";
-import { fakeTxHash, shortHash, withHashes } from "@/lib/dao/hash";
-import { patchLabels } from "@/lib/dao/labels";
+import { daoSlug } from "@/lib/dao/slug";
+import { shortHash, withHashes } from "@/lib/dao/hash";
 import { executeMessage } from "@/lib/dao/executeAuth";
 import {
   encodeCall,
@@ -48,13 +46,11 @@ import { useConnectedWallet } from "@/lib/wallet";
 import type {
   ActionType,
   ChatItem,
-  DaoState,
   Plan,
-  Proposal,
 } from "@/lib/dao/types";
 import { cn } from "@/lib/utils";
 
-type Tab = "members" | "treasury" | "proposals" | "assets" | "activity" | "policy";
+type Tab = "members" | "treasury" | "proposals" | "assets" | "policy";
 
 const ACTION_CODES: Record<ActionType, number> = {
   summarize: 0,
@@ -76,7 +72,6 @@ const TABS: { id: Tab; label: string; icon: typeof Users }[] = [
   { id: "treasury", label: "Treasury", icon: Coins },
   { id: "proposals", label: "Proposals", icon: Vote },
   { id: "assets", label: "Assets", icon: Boxes },
-  { id: "activity", label: "Activity", icon: ScrollText },
   { id: "policy", label: "Policy", icon: ShieldCheck },
 ];
 
@@ -84,12 +79,10 @@ function rid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export default function DaoConsolePage() {
-  const { state, update, reset, ready, source, chainError, refreshing, refresh } =
+  const params = useParams<{ slug: string }>();
+  const param = typeof params.slug === "string" ? params.slug : "";
+  const { state, ready, source, chainError, refreshing, refresh } =
     useDaoState();
   const { sendTransactionAsync } = useSendTransaction();
   const { signMessageAsync } = useSignMessage();
@@ -106,6 +99,7 @@ export default function DaoConsolePage() {
     call: PreparedCall | null;
   } | null>(null);
 
+  const slug = daoSlug(state.config.name);
   const activeMembers = state.members.filter((member) => member.active);
 
   async function sendPrompt(text: string) {
@@ -299,16 +293,6 @@ export default function DaoConsolePage() {
         }
         hash = json.hash;
       }
-      if (call.secrets?.length) {
-        patchLabels((draft) => {
-          for (const entry of call.secrets ?? []) {
-            draft.members[entry.leaf.toLowerCase()] = {
-              name: entry.name,
-              secret: entry.secret,
-            };
-          }
-        });
-      }
       setPlans((previous) =>
         previous[plan.id]
           ? {
@@ -349,172 +333,48 @@ export default function DaoConsolePage() {
     await submitCall(plan, prepared.call);
   }
 
-  async function runPlan(plan: Plan, authorizer: string) {
-    setBusyPlanId(plan.id);
-    await sleep(700);
-    const txHash = fakeTxHash(plan.planHash || plan.id);
-    update((draft) => applyPlan(draft, plan, authorizer, txHash));
-    setPlans((previous) =>
-      previous[plan.id]
-        ? {
-            ...previous,
-            [plan.id]: { ...previous[plan.id], status: "executed", txHash },
-          }
-        : previous,
-    );
-    setBusyPlanId(null);
-  }
-
   function executePlan(plan: Plan) {
-    if (isDaoChainConfigured) {
-      void executeOnChain(plan);
-      return;
-    }
     if (plan.authorization === "vote") {
-      openProposal(plan);
-      return;
-    }
-    if (plan.authorization === "admin") {
-      void requestSignature(plan);
-      return;
-    }
-    if (plan.authorization === "admin-only") {
-      // Emergency pause is a direct admin call; DaoCore.pauseAgent takes no
-      // AdminAuth, so there is nothing to sign.
-      void runPlan(plan, "admin");
-      return;
-    }
-    void runPlan(plan, "agent");
-  }
-
-  function openProposal(plan: Plan) {
-    if (isDaoChainConfigured) {
       setChainMessage(
         "Governance actions need a concrete on-chain proposal target; the console does not encode arbitrary proposal calldata yet.",
       );
       return;
     }
-    if (plan.proposalId) {
-      setTab("proposals");
-      return;
-    }
-    const proposalId = rid("P").toUpperCase();
-    const nextPlan: Plan = {
-      ...plan,
-      status: "awaiting_vote",
-      proposalId,
-    };
-    const proposal: Proposal = {
-      id: proposalId,
-      title: plan.title,
-      action: plan.action,
-      tier: 3,
-      amount:
-        typeof plan.params.amount === "number" ? plan.params.amount : undefined,
-      yes: 0,
-      no: 0,
-      abstain: 0,
-      quorum: 3,
-      endsAt: Date.UTC(2027, 0, 1),
-      status: "open",
-      createdAt: Date.now(),
-      promptHash: plan.promptHash,
-      planHash: plan.planHash,
-      plan: nextPlan,
-    };
-    update((draft) => {
-      draft.proposals.unshift(proposal);
-    });
-    setPlans((previous) => ({ ...previous, [plan.id]: nextPlan }));
-    setTab("proposals");
-  }
-
-  function executeProposal(proposal: Proposal) {
-    if (isDaoChainConfigured) {
-      setChainMessage(
-        "Proposals execute through DaoCore.executeProposal once the vote closes; the console does not submit that call yet.",
-      );
-      return;
-    }
-    const txHash = fakeTxHash(proposal.planHash);
-    update((draft) => {
-      const row = draft.proposals.find((item) => item.id === proposal.id);
-      if (row) row.status = "executed";
-      applyPlan(draft, proposal.plan, "member vote", txHash);
-    });
-  }
-
-  function onVoted(proposal: Proposal, choice: VoteChoice) {
-    if (isDaoChainConfigured) {
-      setChainMessage(
-        "Votes are cast on-chain through the ZK vote paymaster; this button is demo-only.",
-      );
-      return;
-    }
-    const txHash = fakeTxHash(`${proposal.planHash}:${choice}`);
-    update((draft) => {
-      const row = draft.proposals.find((item) => item.id === proposal.id);
-      if (!row) return;
-      row[choice] += 1;
-      if (row.yes >= row.quorum) row.status = "passed";
-      draft.events.unshift({
-        id: rid("e"),
-        at: Date.now(),
-        action: "vote",
-        tier: 3,
-        title: `Private vote on ${row.id}`,
-        authorizers: ["member (private)"],
-        promptHash: row.promptHash,
-        planHash: row.planHash,
-        txHash,
-        simulated: true,
-      });
-    });
-  }
-
-  function simulateVotes(proposal: Proposal) {
-    if (isDaoChainConfigured) {
-      setChainMessage(
-        "Simulated votes are disabled while the console is reading a real DAO.",
-      );
-      return;
-    }
-    const txHash = fakeTxHash(`${proposal.planHash}:simulated`);
-    update((draft) => {
-      const row = draft.proposals.find((item) => item.id === proposal.id);
-      if (!row) return;
-      row.yes += 3;
-      if (row.yes >= row.quorum) row.status = "passed";
-      draft.events.unshift({
-        id: rid("e"),
-        at: Date.now(),
-        action: "vote",
-        tier: 3,
-        title: `3 simulated member votes on ${row.id}`,
-        authorizers: ["demo helper"],
-        promptHash: row.promptHash,
-        planHash: row.planHash,
-        txHash,
-        simulated: true,
-      });
-    });
-  }
-
-  function handleReset() {
-    if (isDaoChainConfigured) {
-      void refresh();
-      return;
-    }
-    if (typeof window !== "undefined" && !window.confirm("Reset the local demo DAO?")) {
-      return;
-    }
-    reset();
-    setItems([]);
-    setPlans({});
-    setTab("members");
+    void executeOnChain(plan);
   }
 
   const usage = percent(state.capUsage.periodSpent, state.config.perPeriodCap);
+
+  if (!ready) {
+    return (
+      <Card className="mx-auto max-w-xl">
+        <CardContent className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+          <RefreshCw className="h-4 w-4 animate-spin" /> Loading DAO…
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (param !== slug) {
+    return (
+      <Card className="mx-auto max-w-xl">
+        <CardContent className="space-y-4 p-8 text-center">
+          <h1 className="text-xl font-semibold tracking-tight">DAO not found</h1>
+          <p className="text-sm text-muted-foreground">
+            This browser only knows <strong>{state.config.name}</strong>.
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button asChild>
+              <Link href={`/dao/${slug}/chat`}>Open its console</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/daos">All DAOs</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -528,10 +388,10 @@ export default function DaoConsolePage() {
                 title={
                   source === "chain"
                     ? "State read from DaoCore; writes go through the agent"
-                    : "localStorage simulation — set NEXT_PUBLIC_DAO_CORE to use the chain"
+                    : "Set NEXT_PUBLIC_DAO_CORE to read a deployed DAO"
                 }
               >
-                {source === "chain" ? "on-chain" : "local simulation"}
+                {source === "chain" ? "on-chain" : "not configured"}
               </Badge>
             ) : (
               <Badge variant="outline">connecting…</Badge>
@@ -560,24 +420,13 @@ export default function DaoConsolePage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link href="/new">
-              <Plus className="h-4 w-4" /> New DAO
-            </Link>
+          <Button
+            variant="outline"
+            onClick={() => void refresh()}
+            disabled={refreshing || !isDaoChainConfigured}
+          >
+            <RefreshCw className="h-4 w-4" /> Refresh
           </Button>
-          {isDaoChainConfigured ? (
-            <Button
-              variant="outline"
-              onClick={() => void refresh()}
-              disabled={refreshing}
-            >
-              <RefreshCw className="h-4 w-4" /> Refresh
-            </Button>
-          ) : (
-            <Button variant="ghost" onClick={handleReset}>
-              <RotateCcw className="h-4 w-4" /> Reset demo
-            </Button>
-          )}
         </div>
       </div>
 
@@ -592,16 +441,13 @@ export default function DaoConsolePage() {
             <span className="font-mono">/api/dao/execute</span>, which builds and
             signs an EIP-8141 frame transaction with the agent key — the agent,
             not your wallet, is <span className="font-mono">tx.sender</span>.
-            Names and invites are local labels; membership, caps, votes and
-            balances come from the chain.
+            Membership, caps, votes, assets and balances all come from the chain.
           </>
         ) : (
           <>
             No <span className="font-mono">NEXT_PUBLIC_DAO_CORE</span> is
-            configured, so this is the localStorage simulation. Intents are
-            queued in Neon and completed by the VPS worker; tier gates and caps
-            mirror DaoCore/AgentAccount, but execution is simulated. Set the DAO
-            address to read and write the real contract.
+            configured. Set it to a deployed DaoCore to read the DAO and execute
+            through the agent. There is no local or simulated state.
           </>
         )}
       </Alert>
@@ -622,7 +468,15 @@ export default function DaoConsolePage() {
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Summary label="Treasury" value={`${money(state.config.treasuryUsdc)} USDC`} />
+        <Summary
+          label="Treasury"
+          value={`${money(state.config.treasuryUsdc)} USDC`}
+          hint={
+            state.oracle
+              ? `$${state.oracle.usdcUsd.toFixed(2)}/USDC · ${state.oracle.source}`
+              : undefined
+          }
+        />
         <Summary label="Members" value={`${activeMembers.length} active`} />
         <Summary
           label="Agent"
@@ -640,7 +494,11 @@ export default function DaoConsolePage() {
           onSend={sendPrompt}
           onExecute={executePlan}
           onRequestSignature={requestSignature}
-          onOpenProposal={openProposal}
+          onOpenProposal={() =>
+            setChainMessage(
+              "Governance actions need a concrete on-chain proposal target; the console does not encode arbitrary proposal calldata yet.",
+            )
+          }
           onDismiss={(plan) => {
             setPlans((previous) => {
               if (!previous[plan.id]) return previous;
@@ -651,52 +509,75 @@ export default function DaoConsolePage() {
           }}
         />
 
-        <div className="space-y-4">
-          <div className="flex gap-1 overflow-x-auto rounded-lg border border-border/60 bg-secondary/30 p-1">
-            {TABS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setTab(item.id)}
-                  aria-pressed={tab === item.id}
-                  data-testid={`dao-tab-${item.id}`}
-                  className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                    tab === item.id
-                      ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {tab === "members" ? (
-            <MembersPanel state={state} update={update} onPrompt={sendPrompt} />
-          ) : tab === "treasury" ? (
-            <TreasuryPanel state={state} onPrompt={sendPrompt} />
-          ) : tab === "proposals" ? (
-            <ProposalsPanel
-              state={state}
-              onVoted={onVoted}
-              onSimulateVotes={simulateVotes}
-              onExecuteProposal={executeProposal}
-              onPrompt={sendPrompt}
-            />
-          ) : tab === "assets" ? (
-            <AssetsPanel state={state} onPrompt={sendPrompt} />
-          ) : tab === "activity" ? (
-            <ActivityFeed state={state} />
-          ) : (
-            <PolicyTable state={state} />
-          )}
-        </div>
+        <TransactionFeed
+          state={state}
+          className="h-[calc(100vh-13rem)] min-h-[560px]"
+        />
       </div>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">DAO controls</h2>
+            <p className="text-sm text-muted-foreground">
+              Members, caps, governance and policy.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-1 overflow-x-auto rounded-lg border border-border/60 bg-secondary/30 p-1">
+          {TABS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                aria-pressed={tab === item.id}
+                data-testid={`dao-tab-${item.id}`}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  tab === item.id
+                    ? "bg-white text-foreground shadow-sm ring-1 ring-border/60"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {tab === "members" ? (
+          <MembersPanel state={state} onPrompt={sendPrompt} />
+        ) : tab === "treasury" ? (
+          <TreasuryPanel state={state} />
+        ) : tab === "proposals" ? (
+          <ProposalsPanel
+            state={state}
+            onVoted={() =>
+              setChainMessage(
+                "Votes are cast on-chain through the ZK vote paymaster; this panel does not submit them yet.",
+              )
+            }
+            onSimulateVotes={() =>
+              setChainMessage(
+                "Simulated votes are not available; this console is chain-only.",
+              )
+            }
+            onExecuteProposal={() =>
+              setChainMessage(
+                "Proposals execute through DaoCore.executeProposal once the vote closes; the console does not submit that call yet.",
+              )
+            }
+            onPrompt={sendPrompt}
+          />
+        ) : tab === "assets" ? (
+          <AssetsPanel state={state} onPrompt={sendPrompt} />
+        ) : (
+          <PolicyTable state={state} />
+        )}
+      </section>
 
       <AdminSignatureDialog
         request={signing?.request ?? null}
@@ -731,11 +612,8 @@ export default function DaoConsolePage() {
             );
             return;
           }
-          void runPlan(
-            current.plan,
-            result.simulated
-              ? "admin (simulated)"
-              : `admin ${shortHash(result.signer, 6, 4)}`,
+          setChainMessage(
+            "This plan has no on-chain call to submit. Nothing was executed.",
           );
         }}
       />
@@ -743,125 +621,20 @@ export default function DaoConsolePage() {
   );
 }
 
-function applyPlan(
-  draft: DaoState,
-  plan: Plan,
-  authorizer: string,
-  txHash: `0x${string}`,
-) {
-  switch (plan.action) {
-    case "add_members": {
-      const names = Array.isArray(plan.params.names)
-        ? (plan.params.names as string[])
-        : [];
-      let added = 0;
-      names.forEach((name, index) => {
-        const exists = draft.members.some(
-          (member) =>
-            member.active && member.name.toLowerCase() === name.toLowerCase(),
-        );
-        if (exists) return;
-        draft.members.push({
-          id: rid(`m-${index}`),
-          name,
-          wallet: `0x${fakeTxHash(`${name}:wallet`).slice(2, 42)}`,
-          leaf: fakeTxHash(`${name}:leaf`),
-          role: "member",
-          joinedAt: Date.now(),
-          active: true,
-        });
-        added += 1;
-      });
-      draft.capUsage.membersAdded += added;
-      break;
-    }
-    case "remove_member": {
-      const id = String(plan.params.memberId || "");
-      const name = String(plan.params.name || "");
-      const member = draft.members.find(
-        (row) => row.id === id || row.name.toLowerCase() === name.toLowerCase(),
-      );
-      if (member) member.active = false;
-      break;
-    }
-    case "pay": {
-      draft.capUsage.periodSpent += Number(plan.params.amount) || 0;
-      break;
-    }
-    case "acquire_asset": {
-      const asset = draft.assets.find(
-        (row) => row.id === String(plan.params.assetId),
-      );
-      if (asset) asset.held = true;
-      draft.capUsage.periodSpent += Number(plan.params.price) || 0;
-      break;
-    }
-    case "dispose_asset": {
-      const asset = draft.assets.find(
-        (row) => row.id === String(plan.params.assetId),
-      );
-      if (asset) asset.held = false;
-      break;
-    }
-    case "change_role": {
-      const member = draft.members.find(
-        (row) => row.name === String(plan.params.member),
-      );
-      const newRole = String(plan.params.newRole || "member");
-      if (member && (newRole === "member" || newRole === "contributor")) {
-        member.role = newRole;
-      }
-      break;
-    }
-    case "pause": {
-      draft.config.agentPaused = plan.params.mode !== "resume";
-      break;
-    }
-    case "update_policy": {
-      const change = String(plan.params.change || "");
-      if (change.includes("2500")) {
-        draft.config.perPeriodCap = 2500;
-      }
-      const assetId = String(plan.params.assetId || "");
-      const asset = draft.assets.find(
-        (row) =>
-          row.id === assetId ||
-          (change.toLowerCase().includes(row.name.toLowerCase()) &&
-            /allowlist/i.test(change)),
-      );
-      if (asset && /allowlist/i.test(change)) asset.allowlisted = true;
-      break;
-    }
-    default:
-      break;
-  }
 
-  if (plan.action === "summarize") return;
-
-  draft.events.unshift({
-    id: rid("e"),
-    at: Date.now(),
-    action: plan.action,
-    tier: plan.tier,
-    title: plan.title,
-    authorizers: [authorizer],
-    promptHash: plan.promptHash,
-    planHash: plan.planHash,
-    txHash,
-    simulated: true,
-  });
-}
 
 function Summary({
   label,
   value,
   tone,
   progress,
+  hint,
 }: {
   label: string;
   value: string;
   tone?: "success" | "warning";
   progress?: number;
+  hint?: string;
 }) {
   return (
     <Card className="bg-gradient-to-br from-white to-[hsl(46_60%_97%)]">
@@ -871,8 +644,8 @@ function Summary({
             <span
               className={
                 tone === "success"
-                  ? "h-1.5 w-1.5 rounded-full bg-emerald-500"
-                  : "h-1.5 w-1.5 rounded-full bg-amber-500"
+                  ? "h-1.5 w-1.5 rounded-full bg-yellow-500"
+                  : "h-1.5 w-1.5 rounded-full bg-gray-400"
               }
             />
           ) : null}
@@ -881,10 +654,18 @@ function Summary({
         <div className="mt-1.5 text-lg font-semibold tracking-tight">
           {value}
         </div>
+        {hint ? (
+          <div
+            className="mt-0.5 truncate text-[10px] text-muted-foreground"
+            title={hint}
+          >
+            {hint}
+          </div>
+        ) : null}
         {typeof progress === "number" ? (
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[hsl(45_96%_55%)] to-[hsl(36_92%_52%)]"
+              className="h-full rounded-full bg-gradient-to-r from-[hsl(48_96%_58%)] to-[hsl(45_92%_48%)]"
               style={{ width: `${Math.min(100, progress)}%` }}
             />
           </div>

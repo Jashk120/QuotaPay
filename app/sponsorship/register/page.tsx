@@ -188,7 +188,7 @@ export default function RegisterPage() {
                 {existing.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 px-3 py-2"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-white px-3 py-2 shadow-[0_1px_2px_hsl(40_30%_20%/0.03)]"
                   >
                     <span className="font-medium">{r.beneficiaryId}</span>
                     <span className="font-mono text-xs text-muted-foreground">

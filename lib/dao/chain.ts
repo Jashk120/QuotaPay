@@ -16,12 +16,12 @@ import type {
   DaoState,
   Member,
   MemberRole,
+  OraclePrice,
   Plan,
   PolicyRow,
   Proposal,
 } from "./types";
-import type { DaoLabels } from "./labels";
-import { labelKey } from "./labels";
+import { readChainlinkUsdcUsd } from "./oracle";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 export const ZERO_HASH = `0x${"0".repeat(64)}` as Hex;
@@ -42,6 +42,9 @@ const ACTION_EXECUTED = parseAbiItem(
 );
 const ASSET_ALLOWED = parseAbiItem(
   "event AssetAllowed(bytes32 indexed assetId, address indexed token, uint256 unitPrice, uint256 cap)",
+);
+const DAO_INITIALIZED = parseAbiItem(
+  "event DaoInitialized(bytes32 indexed daoId, address indexed admin)",
 );
 
 const ROLE_NAMES: MemberRole[] = ["member", "contributor", "admin"];
@@ -193,6 +196,7 @@ export type ChainSnapshot = {
   membershipRoot: Hex;
   memberCount: number;
   proposalCount: number;
+  createdAt: number;
   members: ChainMember[];
   proposals: ChainProposal[];
   assets: ChainAsset[];
@@ -207,6 +211,7 @@ export type ChainSnapshot = {
     periodStart: number;
     addsThisPeriod: number;
   };
+  oracle?: OraclePrice;
   warnings: string[];
 };
 
@@ -311,12 +316,30 @@ export async function readChainSnapshot(
   };
 
   if (tokenAddress) {
-    const capRaw = await client.readContract({
-      address: core,
-      abi: daoCoreAbi,
-      functionName: "tokenCaps",
-      args: [tokenAddress],
-    });
+    const [capRaw, balanceRaw, tokenDecimals] = await Promise.all([
+      client.readContract({
+        address: core,
+        abi: daoCoreAbi,
+        functionName: "tokenCaps",
+        args: [tokenAddress],
+      }),
+      client.readContract({
+        address: tokenAddress,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [core],
+      }),
+      optional(
+        () =>
+          client.readContract({
+            address: tokenAddress,
+            abi: erc20Abi,
+            functionName: "decimals",
+          }),
+        warnings,
+        "token.decimals",
+      ),
+    ]);
     cap = {
       allowed: capRaw[0],
       perTx: capRaw[1],
@@ -325,22 +348,7 @@ export async function readChainSnapshot(
       periodStart: capRaw[4],
       spent: capRaw[5],
     };
-    balance = await client.readContract({
-      address: tokenAddress,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [core],
-    });
-    const tokenDecimals = await optional(
-      () =>
-        client.readContract({
-          address: tokenAddress,
-          abi: erc20Abi,
-          functionName: "decimals",
-        }),
-      warnings,
-      "token.decimals",
-    );
+    balance = balanceRaw;
     if (tokenDecimals != null) decimals = Number(tokenDecimals);
   } else {
     balance = await client.getBalance({ address: core });
@@ -353,6 +361,21 @@ export async function readChainSnapshot(
     balance,
     ...cap,
   };
+
+  // ---- optional real price source ----------------------------------------
+  let oracle: OraclePrice | undefined;
+  if (config.chainlinkUsdcUsd) {
+    oracle =
+      (await optional(
+        () =>
+          readChainlinkUsdcUsd(
+            client,
+            config.chainlinkUsdcUsd as Address,
+          ),
+        warnings,
+        "Chainlink USDC/USD",
+      )) ?? undefined;
+  }
 
   // ---- members ------------------------------------------------------------
   const [addedLogs, removedLogs] = await Promise.all([
@@ -445,66 +468,93 @@ export async function readChainSnapshot(
     const assetIds = Array.from(
       new Set((allowedLogs ?? []).map((log) => log.args.assetId as Hex)),
     );
-    for (const assetId of assetIds) {
-      const [assetRaw, held] = await Promise.all([
-        client.readContract({
-          address: assetModule,
-          abi: assetModuleAbi,
-          functionName: "assets",
-          args: [assetId],
-        }),
-        client.readContract({
-          address: assetModule,
-          abi: assetModuleAbi,
-          functionName: "holdings",
-          args: [core, assetId],
-        }),
-      ]);
-      assets.push({
-        assetId,
-        token: assetRaw[0] as Address,
-        unitPrice: assetRaw[1],
-        cap: assetRaw[2],
-        allowed: assetRaw[3],
-        held,
-      });
-    }
+    const rows = await Promise.all(
+      assetIds.map(async (assetId) => {
+        const [assetRaw, held] = await Promise.all([
+          client.readContract({
+            address: assetModule,
+            abi: assetModuleAbi,
+            functionName: "assets",
+            args: [assetId],
+          }),
+          client.readContract({
+            address: assetModule,
+            abi: assetModuleAbi,
+            functionName: "holdings",
+            args: [core, assetId],
+          }),
+        ]);
+        return {
+          assetId,
+          token: assetRaw[0] as Address,
+          unitPrice: assetRaw[1],
+          cap: assetRaw[2],
+          allowed: assetRaw[3],
+          held,
+        } satisfies ChainAsset;
+      }),
+    );
+    assets.push(...rows);
   }
 
   // ---- policy -------------------------------------------------------------
-  const policy: PolicyRow[] = [];
-  for (const probe of POLICY_PROBES) {
-    const selector = toFunctionSelector(probe.signature);
-    const rule = await optional(
+  const policyRows = await Promise.all(
+    POLICY_PROBES.map(async (probe) => {
+      const selector = toFunctionSelector(probe.signature);
+      const rule = await optional(
+        () =>
+          client.readContract({
+            address: agentAccount as Address,
+            abi: agentAccountAbi,
+            functionName: "rules",
+            args: [core, selector],
+          }),
+        warnings,
+        `rules(${probe.label})`,
+      );
+      if (!rule) return null;
+      return {
+        target: "DaoCore",
+        selector: probe.signature,
+        label: probe.label,
+        tier: (rule[0] ? Math.max(1, Number(rule[1])) : 0) as PolicyRow["tier"],
+      } satisfies PolicyRow;
+    }),
+  );
+  const policy: PolicyRow[] = policyRows.filter(
+    (row): row is PolicyRow => row !== null,
+  );
+
+  // ---- events + creation time --------------------------------------------
+  const [actionLogs, initLogs] = await Promise.all([
+    optional(
       () =>
-        client.readContract({
-          address: agentAccount as Address,
-          abi: agentAccountAbi,
-          functionName: "rules",
-          args: [core, selector],
+        client.getLogs({
+          address: core,
+          event: ACTION_EXECUTED,
+          fromBlock: 0n,
         }),
       warnings,
-      `rules(${probe.label})`,
-    );
-    if (!rule) continue;
-    policy.push({
-      target: "DaoCore",
-      selector: probe.signature,
-      label: probe.label,
-      tier: (rule[0] ? Math.max(1, Number(rule[1])) : 0) as PolicyRow["tier"],
-    });
-  }
-
-  // ---- events -------------------------------------------------------------
-  const actionLogs = await optional(
-    () => client.getLogs({ address: core, event: ACTION_EXECUTED, fromBlock: 0n }),
-    warnings,
-    "ActionExecuted logs",
-  );
+      "ActionExecuted logs",
+    ),
+    optional(
+      () =>
+        client.getLogs({
+          address: core,
+          event: DAO_INITIALIZED,
+          fromBlock: 0n,
+        }),
+      warnings,
+      "DaoInitialized logs",
+    ),
+  ]);
 
   const blockTimes = new Map<bigint, number>();
   const uniqueBlocks = Array.from(
-    new Set((actionLogs ?? []).map((log) => log.blockNumber)),
+    new Set([
+      ...(actionLogs ?? []).map((log) => log.blockNumber),
+      ...(initLogs ?? []).map((log) => log.blockNumber),
+    ]),
   );
   await Promise.all(
     uniqueBlocks.map(async (blockNumber) => {
@@ -533,6 +583,11 @@ export async function readChainSnapshot(
     };
   });
 
+  let createdAt = 0;
+  if (initLogs?.[0]?.blockNumber != null) {
+    createdAt = blockTimes.get(initLogs[0].blockNumber) ?? 0;
+  }
+
   return {
     core,
     daoId: daoId as Hex,
@@ -547,6 +602,7 @@ export async function readChainSnapshot(
     membershipRoot: membershipRoot as Hex,
     memberCount: Number(memberCountRaw),
     proposalCount: Number(proposalCountRaw),
+    createdAt,
     members,
     proposals,
     assets,
@@ -561,6 +617,7 @@ export async function readChainSnapshot(
       periodStart: Number(memberPeriodStart),
       addsThisPeriod: Number(memberAddsThisPeriod),
     },
+    oracle,
     warnings,
   };
 }
@@ -614,36 +671,31 @@ function proposalStatus(
 }
 
 /**
- * Merge the authoritative chain snapshot with the local presentation labels.
- * Labels never override a chain value — only the human strings the chain does
- * not carry (names, titles, kinds).
+ * Project the chain snapshot into the UI model.
+ *
+ * Human names, asset kinds and proposal titles are not on-chain, so the console
+ * shows the on-chain identifiers instead of inventing labels. Every numeric
+ * value, role, cap, vote and event here comes from the contracts or their logs.
  */
-export function snapshotToDaoState(
-  snapshot: ChainSnapshot,
-  labels: DaoLabels,
-): DaoState {
+export function snapshotToDaoState(snapshot: ChainSnapshot): DaoState {
   const decimals = snapshot.token.decimals;
 
-  const members: Member[] = snapshot.members.map((row) => {
-    const label = labels.members[labelKey(row.leaf)];
-    return {
-      id: `m-${row.index}`,
-      index: row.index,
-      name: label?.name ?? `Member ${row.index + 1}`,
-      wallet: label?.wallet ?? "",
-      leaf: row.leaf,
-      role: row.role,
-      joinedAt: 0,
-      active: true,
-    };
-  });
+  const members: Member[] = snapshot.members.map((row) => ({
+    id: `m-${row.index}`,
+    index: row.index,
+    name: `Member ${row.index + 1}`,
+    wallet: "",
+    leaf: row.leaf,
+    role: row.role,
+    joinedAt: 0,
+    active: true,
+  }));
 
   const quorumBps = snapshot.memberPolicy.quorumBps;
   const proposals: Proposal[] = snapshot.proposals.map((proposal) => {
-    const label = labels.proposals[labelKey(proposal.paramsHash)];
     const selector = proposal.data.slice(0, 10).toLowerCase();
     const action = SELECTOR_ACTION[selector] ?? "propose";
-    const title = label?.title ?? `Proposal #${proposal.id}`;
+    const title = `Proposal #${proposal.id}`;
     const status = proposalStatus(proposal, quorumBps);
     return {
       id: String(proposal.id),
@@ -664,18 +716,15 @@ export function snapshotToDaoState(
     };
   });
 
-  const assets: DaoAsset[] = snapshot.assets.map((asset) => {
-    const label = labels.assets[labelKey(asset.assetId)];
-    return {
-      id: asset.assetId,
-      name: label?.name ?? `Asset ${shortHex(asset.assetId)}`,
-      kind: label?.kind ?? "RWA",
-      priceUsdc: toNumber(asset.unitPrice, decimals),
-      capUsdc: toNumber(asset.cap, decimals),
-      allowlisted: asset.allowed,
-      held: asset.held > 0n,
-    };
-  });
+  const assets: DaoAsset[] = snapshot.assets.map((asset) => ({
+    id: asset.assetId,
+    name: `Asset ${shortHex(asset.assetId)}`,
+    kind: "Token",
+    priceUsdc: toNumber(asset.unitPrice, decimals),
+    capUsdc: toNumber(asset.cap, decimals),
+    allowlisted: asset.allowed,
+    held: asset.held > 0n,
+  }));
 
   const events: DaoEvent[] = snapshot.events.map((event) => ({
     id: event.id,
@@ -693,7 +742,7 @@ export function snapshotToDaoState(
   return {
     version: 1,
     config: {
-      name: labels.daoName || config.daoName || `DAO ${shortHex(snapshot.daoId)}`,
+      name: config.daoName || `DAO ${shortHex(snapshot.daoId)}`,
       daoId: snapshot.daoId,
       coreAddress: snapshot.core,
       agentAddress: snapshot.agentAccount,
@@ -707,15 +756,16 @@ export function snapshotToDaoState(
         1,
         Math.round(snapshot.memberPolicy.votePeriod / 3600),
       ),
-      createdAt: labels.createdAt ?? 0,
+      createdAt: snapshot.createdAt,
       agentPaused: snapshot.agentPaused,
     },
     members,
-    invites: labels.invites ?? [],
+    invites: [],
     proposals,
     assets,
     events,
     policy: snapshot.policy,
+    oracle: snapshot.oracle,
     capUsage: {
       periodSpent: toNumber(snapshot.token.spent, decimals),
       membersAdded: snapshot.memberPolicy.addsThisPeriod,

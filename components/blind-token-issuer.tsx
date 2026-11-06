@@ -113,7 +113,7 @@ export function BlindTokenIssuer({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border/60 bg-background/50 p-3">
+      <div className="rounded-xl border border-border/70 bg-secondary/30 p-3">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
           Session address
         </div>
@@ -184,7 +184,7 @@ export function BlindTokenIssuer({
 
       {blinded !== null ? (
         <div
-          className="rounded-lg border border-border/60 bg-background/40 p-3 text-xs"
+          className="rounded-xl border border-border/70 bg-secondary/30 p-3 text-xs"
           data-testid="blind-blinded"
         >
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -198,7 +198,7 @@ export function BlindTokenIssuer({
 
       {signedBlinded !== null ? (
         <div
-          className="rounded-lg border border-border/60 bg-background/40 p-3 text-xs"
+          className="rounded-xl border border-border/70 bg-secondary/30 p-3 text-xs"
           data-testid="blind-signed"
         >
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">

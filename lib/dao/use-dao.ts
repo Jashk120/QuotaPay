@@ -1,53 +1,48 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Address } from "viem";
 import { config, isDaoChainConfigured } from "@/lib/config";
 import { publicClient } from "@/lib/contracts";
 import { readChainSnapshot, snapshotToDaoState } from "./chain";
-import { loadLabels, patchLabels } from "./labels";
-import { seedDao } from "./seed";
-import {
-  DAO_CHANNEL,
-  DAO_STORAGE_KEY,
-  broadcastDao,
-  loadDao,
-  saveDao,
-} from "./store";
+import { emptyDaoState } from "./empty";
 import type { DaoState } from "./types";
 
-export type DaoSource = "local" | "chain";
+export type DaoSource = "chain" | "unconfigured";
 
 /**
- * One client-side source of truth for the operator console.
+ * The operator console has exactly one source of truth: the chain.
  *
- * Chain mode (NEXT_PUBLIC_DAO_CORE set): DaoCore is authoritative. The hook
- * hydrates from `readChainSnapshot` and polls; localStorage only holds the
- * presentation labels (names, invites) that the chain does not carry.
- *
- * Local mode: the previous demo behaviour, persisted to localStorage and
- * mirrored to other tabs over BroadcastChannel.
+ * `NEXT_PUBLIC_DAO_CORE` names the DaoCore. Every member, cap, proposal, asset,
+ * balance, policy rule and execution event is read from that contract (and its
+ * AgentAccount/AssetModule) on each refresh. There is no seed, no localStorage
+ * DAO and no simulated execution: if the address is missing or the read fails,
+ * the console shows an empty state and an error instead of invented data.
  */
 export function useDaoState() {
   const chainMode = isDaoChainConfigured;
-  const [state, setState] = useState<DaoState>(() => seedDao());
-  const [ready, setReady] = useState(false);
-  const [source, setSource] = useState<DaoSource>(chainMode ? "chain" : "local");
+  const [state, setState] = useState<DaoState>(() =>
+    emptyDaoState(chainMode ? config.daoCoreAddress : ""),
+  );
+  const [ready, setReady] = useState(!chainMode);
+  const [source, setSource] = useState<DaoSource>(
+    chainMode ? "chain" : "unconfigured",
+  );
   const [chainError, setChainError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const stateRef = useRef(state);
-  const tabId = useRef(`tab-${Math.random().toString(36).slice(2, 10)}`);
 
   const refresh = useCallback(async () => {
-    if (!chainMode) return;
+    if (!chainMode) {
+      setReady(true);
+      return;
+    }
     setRefreshing(true);
     try {
       const snapshot = await readChainSnapshot(
         publicClient,
         config.daoCoreAddress as Address,
       );
-      const next = snapshotToDaoState(snapshot, loadLabels());
-      stateRef.current = next;
+      const next = snapshotToDaoState(snapshot);
       setState(next);
       setSource("chain");
       setChainError(
@@ -55,6 +50,7 @@ export function useDaoState() {
       );
     } catch (cause) {
       setChainError(cause instanceof Error ? cause.message : String(cause));
+      setSource("unconfigured");
     } finally {
       setRefreshing(false);
       setReady(true);
@@ -62,99 +58,17 @@ export function useDaoState() {
   }, [chainMode]);
 
   useEffect(() => {
-    if (chainMode) {
-      // `refresh` owns `ready`: the console stays in a "connecting" state until
-      // the first authoritative read lands, so seed data is never shown as
-      // on-chain state.
-      void refresh();
-      const interval = window.setInterval(
-        () => void refresh(),
-        Math.max(3_000, config.daoRefreshMs),
-      );
-      return () => window.clearInterval(interval);
-    }
-
-    const loaded = loadDao();
-    stateRef.current = loaded;
-    setState(loaded);
-    setReady(true);
-
-    const channel =
-      typeof BroadcastChannel !== "undefined"
-        ? new BroadcastChannel(DAO_CHANNEL)
-        : null;
-    if (channel) {
-      channel.onmessage = (event: MessageEvent) => {
-        if (event.data?.source === tabId.current) return;
-        const next = loadDao();
-        stateRef.current = next;
-        setState(next);
-      };
-    }
-
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== DAO_STORAGE_KEY) return;
-      const next = loadDao();
-      stateRef.current = next;
-      setState(next);
-    };
-    window.addEventListener("storage", onStorage);
-
-    return () => {
-      channel?.close();
-      window.removeEventListener("storage", onStorage);
-    };
-  }, [chainMode, refresh]);
-
-  const commit = useCallback(
-    (next: DaoState) => {
-      stateRef.current = next;
-      if (chainMode) {
-        // Chain state is authoritative: only the label overlay is local, and
-        // the next refresh replaces everything else with on-chain values.
-        patchLabels((draft) => {
-          draft.invites = next.invites;
-          draft.daoName = next.config.name;
-        });
-        setState(next);
-        void refresh();
-        return;
-      }
-      saveDao(next);
-      broadcastDao(tabId.current);
-      setState(next);
-    },
-    [chainMode, refresh],
-  );
-
-  const update = useCallback(
-    (recipe: (draft: DaoState) => void) => {
-      const draft = structuredClone(stateRef.current);
-      recipe(draft);
-      commit(draft);
-    },
-    [commit],
-  );
-
-  const replace = useCallback((next: DaoState) => commit(next), [commit]);
-
-  const reset = useCallback(() => {
-    if (chainMode) {
-      void refresh();
+    if (!chainMode) {
+      setReady(true);
       return;
     }
-    commit(seedDao());
-  }, [chainMode, refresh, commit]);
+    void refresh();
+    const interval = window.setInterval(
+      () => void refresh(),
+      Math.max(3_000, config.daoRefreshMs),
+    );
+    return () => window.clearInterval(interval);
+  }, [chainMode, refresh]);
 
-  return {
-    state,
-    ready,
-    source,
-    chainError,
-    refreshing,
-    refresh,
-    update,
-    replace,
-    reset,
-  };
+  return { state, ready, source, chainError, refreshing, refresh };
 }

@@ -4,7 +4,6 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { Web3Provider } from "@/components/web3-provider";
 import { AnonRpcProvider } from "@/lib/anonRpc";
-import { RoleProvider } from "@/lib/role";
 
 export const metadata: Metadata = {
   title: {
@@ -21,16 +20,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <Web3Provider>
           <AnonRpcProvider>
-            <RoleProvider>
-              <div className="pointer-events-none fixed inset-0 -z-10 bg-glow" />
-              <div className="pointer-events-none fixed inset-0 -z-10 bg-grid bg-grid-mask" />
+            <div className="pointer-events-none fixed inset-0 -z-10 bg-glow" />
+              <div className="pointer-events-none fixed inset-0 -z-10 opacity-60 bg-grid bg-grid-mask" />
               <SiteHeader />
               <main className="container pb-24 pt-10">{children}</main>
-              <footer className="border-t border-border/60 py-10">
+              <footer className="border-t border-border/70 bg-white/40 py-10 backdrop-blur">
                 <div className="container flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
@@ -50,13 +48,13 @@ export default function RootLayout({
                       href="/"
                       className="transition-colors hover:text-foreground"
                     >
-                      Operator console
+                      Your DAO
                     </Link>
                     <Link
                       href="/new"
                       className="transition-colors hover:text-foreground"
                     >
-                      New DAO
+                      Create DAO
                     </Link>
                     <Link
                       href="/sponsorship"
@@ -69,7 +67,6 @@ export default function RootLayout({
                   </div>
                 </div>
               </footer>
-            </RoleProvider>
           </AnonRpcProvider>
         </Web3Provider>
       </body>

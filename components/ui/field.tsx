@@ -26,7 +26,7 @@ export function Field({
         ) : null}
       </div>
       {children}
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="text-xs text-gray-600">{error}</p> : null}
     </div>
   );
 }

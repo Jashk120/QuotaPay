@@ -1,0 +1,18 @@
+{
+  "chainId": 1337,
+  "rpc": "https://altmempool.forshtat.com/rpc",
+  "deployer": "0x348836a9b164f241945205B5a92f496BB8C3c1d8",
+  "daoId": "0xa0c5cb17d704019f87e24d6133e7de1a613161ccdd9bc775a4bb66620e242d0c",
+  "daoCore": "0xE1E940D782c46b5283E2325092b466Efda1f46cf",
+  "agentAccount": "0xd831734F89e6A1E2AEd2bfB0576a6BEe74dE129f",
+  "assetModule": "0xEe7AA4Cc4feAC08e977Dc14c9F18860DdA210f49",
+  "admin": "0x348836a9b164f241945205B5a92f496BB8C3c1d8",
+  "agentSigner": "0xB5Db9D0A3cE6D5515cf7f32764C6477995d5225C",
+  "factory": "0xefa565c99edaa3b02722525a95cbc9c9148a61fc",
+  "usdc": "0x2cd5ee71e7bc0067c9f78c7800f4a04a17d23dcd",
+  "assetId": "0xa42bec8325e2a2a34ffacca6361979204eab4a97cb3749cd43f26db1a0bc2b58",
+  "gasPaymaster": "0xd805a3c228195500a5ea1e3c287e118235aff3fa",
+  "voteVerifier": null,
+  "votePaymaster": null,
+  "deployedAt": "2026-11-06T19:49:38.374Z"
+}
