@@ -78,6 +78,7 @@ export default function DaoConsolePage() {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [plans, setPlans] = useState<Record<string, Plan>>({});
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null);
+  const [llmSource, setLlmSource] = useState<string | null>(null);
   const [signing, setSigning] = useState<{
     plan: Plan;
     request: SignatureRequest;
@@ -85,10 +86,30 @@ export default function DaoConsolePage() {
 
   const activeMembers = state.members.filter((member) => member.active);
 
-  function sendPrompt(text: string) {
+  async function sendPrompt(text: string) {
     const prompt = text.trim();
     if (!prompt) return;
-    const reply = parsePrompt(prompt, state);
+    // Prefer the server LLM (OpenAI / OpenRouter / OpenAI-compatible custom
+    // gateway for cheap Chinese models). Falls back to the deterministic
+    // local parser when no key is set or the model fails.
+    let reply;
+    try {
+      const res = await fetch("/api/dao/agent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt, state }),
+      });
+      if (!res.ok) throw new Error(`agent API ${res.status}`);
+      const json = (await res.json()) as {
+        reply: ReturnType<typeof parsePrompt>;
+        source?: string;
+      };
+      reply = json.reply;
+      setLlmSource(json.source ?? null);
+    } catch {
+      reply = parsePrompt(prompt, state);
+      setLlmSource("local");
+    }
     const userItem: ChatItem = {
       id: rid("msg"),
       role: "user",
@@ -288,6 +309,9 @@ export default function DaoConsolePage() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">DAO operator</Badge>
             <Badge variant="warning">UI-only demo</Badge>
+            <Badge variant="outline" title="Intent parser in use">
+              {llmSource?.startsWith("llm:") ? llmSource : "parser: local"}
+            </Badge>
             <TierBadge tier={1} />
           </div>
           <h1 className="text-3xl font-semibold tracking-tight">
