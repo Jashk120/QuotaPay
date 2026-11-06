@@ -13,3 +13,8 @@ export function db() {
 export function isDbConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
+
+/** Connection string the worker should use: least-privilege role first. */
+export function workerDbUrl(): string | null {
+  return process.env.WORKER_DATABASE_URL || process.env.DATABASE_URL || null;
+}

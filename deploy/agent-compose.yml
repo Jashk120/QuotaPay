@@ -1,0 +1,14 @@
+# Agent worker compose overlay for the VPS (~/agent/docker-compose.yml).
+# The worker makes outbound connections only (Neon + RPC): no published ports,
+# so there is no inbound endpoint to authenticate. Secrets live in ~/agent/.env
+# (mode 600), never baked into the image.
+name: agent
+
+services:
+  agent-worker:
+    image: ghcr.io/jashk120/quotapay-agent-worker:latest
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
