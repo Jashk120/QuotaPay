@@ -29,7 +29,7 @@ function rid(prefix) {
 
 async function claim() {
   const rows = await sql`
-    select id, prompt, state_snapshot from agent_intents
+    select id, prompt, state_snapshot, reply from agent_intents
     where status = 'queued' order by created_at asc limit 1
   `;
   if (rows.length === 0) return null;
@@ -45,7 +45,11 @@ async function claim() {
 async function processOne(row) {
   let outcome;
   try {
-    outcome = await runLoop({ prompt: row.prompt }, row.state_snapshot, {
+    // The API already ran the LLM + policy engine; carry its plan so the
+    // worker gates and records exactly what the user saw.
+    const stored = row.reply ?? null;
+    const plan = stored?.kind === "plan" ? stored.plan : stored?.plan ?? null;
+    outcome = await runLoop({ prompt: row.prompt, plan }, row.state_snapshot, {
       executeOnchain: EXECUTE,
     });
   } catch (e) {

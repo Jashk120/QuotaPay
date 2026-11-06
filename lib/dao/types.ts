@@ -13,7 +13,8 @@ export type ActionType =
   | "update_policy"
   | "pause"
   | "summarize"
-  | "vote";
+  | "vote"
+  | "frame";
 
 export type PlanStatus =
   | "draft"

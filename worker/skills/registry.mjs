@@ -8,6 +8,13 @@
  * on-chain policy already allows. Real frame-tx submission lands behind
  * EXECUTE_ONCHAIN=true; until then execute() simulates and labels it so.
  */
+import {
+  FRAME_PATTERNS,
+  buildFramePlan,
+  validateFramePlan,
+} from "../../lib/dao/frames.mjs";
+
+const FRAME_PATTERN_NAMES = FRAME_PATTERNS.map((p) => p.pattern);
 
 function findMember(state, name) {
   const needle = String(name || "").trim().toLowerCase();
@@ -149,6 +156,38 @@ export const SKILLS = {
       return { ok: true, reason: "admin-only safety valve", adminOnly: true };
     },
   },
+  frame: {
+    tier: 1,
+    reads: ["config", "members", "assets"],
+    writes: ["events"],
+    authorize(args, state) {
+      const pattern = String(args.pattern || "");
+      if (!FRAME_PATTERN_NAMES.includes(pattern)) {
+        return { ok: false, reason: `unknown frame pattern "${pattern}"` };
+      }
+      const plan = buildFramePlan(pattern, {
+        sender: state.config.agentAddress,
+        paymaster: state.config.agentAddress,
+        calls: Number(args.calls) || 1,
+        value: args.value ? BigInt(String(args.value)) : undefined,
+      });
+      const check = validateFramePlan(plan);
+      if (!check.ok) {
+        return { ok: false, reason: `EIP-8141 violation: ${check.errors.join("; ")}` };
+      }
+      // Value-moving patterns stay behind the admin tier; the agent can only
+      // build the sponsored/policy shapes alone.
+      const adminPatterns = new Set(["value_transfer", "channel_expiry", "multisig"]);
+      return {
+        ok: true,
+        reason: `${plan.frames.length}-frame ${pattern} valid`,
+        tier: adminPatterns.has(pattern) ? 2 : 1,
+        adminSignature: adminPatterns.has(pattern),
+        frames: plan.frames.length,
+        plan,
+      };
+    },
+  },
 };
 
 /** Simulated execution. Real path builds frame txs via lib/daoFrameTx.mjs
@@ -170,6 +209,13 @@ export function executeSkill(name, args, gate, ctx = {}) {
 function stepsFor(name, args, gate) {
   if (!gate.ok) return [];
   switch (name) {
+    case "frame":
+      return [
+        `build ${gate.frames}-frame EIP-8141 transaction (${args.pattern})`,
+        "validate static constraints",
+        "sign with the agent key",
+        "submit via eth_sendFrameTransaction",
+      ];
     case "acquire_asset":
       return ["approve exact cost", `buy ${gate.asset?.name}`, "record holding", "reset approval to 0"];
     case "pay":

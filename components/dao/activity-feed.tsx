@@ -4,6 +4,7 @@ import {
   Activity,
   Boxes,
   FileText,
+  Layers,
   PauseCircle,
   Send,
   ShieldCheck,
@@ -31,6 +32,7 @@ const ICONS: Record<ActionType, typeof Activity> = {
   pause: PauseCircle,
   summarize: Activity,
   vote: Vote,
+  frame: Layers,
 };
 
 export function ActivityFeed({ state }: { state: DaoState }) {

@@ -24,6 +24,7 @@ const ACTION_TO_SKILL = {
   propose: "propose",
   update_policy: "update_policy",
   pause: "pause",
+  frame: "frame",
   summarize: null,
   vote: null,
 };
@@ -33,12 +34,32 @@ const ACTION_TO_SKILL = {
 export async function runLoop(intent, state, opts = {}) {
   const trace = [];
   const extractor = opts.extractor || null;
+  const presetPlan = intent.plan || null;
   let currentPrompt = intent.prompt;
+  let step = 0;
 
-  for (let step = 0; step < MAX_STEPS; step++) {
-    // REASON: model extraction if provided, else authoritative parser.
+  for (; step < MAX_STEPS; step++) {
+    // REASON: a plan produced by the API/LLM and stored with the intent wins;
+    // otherwise extract with the model, else the authoritative parser.
     let skill;
     let args;
+    if (step === 0 && presetPlan) {
+      trace.push({ phase: "reason", plan: presetPlan.title, action: presetPlan.action, tier: presetPlan.tier, source: "stored" });
+      const mapped = ACTION_TO_SKILL[presetPlan.action];
+      if (!mapped) return { status: "done", trace, reply: { kind: "plan", plan: presetPlan }, note: "read-only plan, no skill" };
+      // A stored plan still goes through the gate below before anything runs.
+      const def = SKILLS[mapped];
+      const gate = def ? def.authorize(planToArgs(presetPlan), state) : { ok: false, reason: "unknown skill" };
+      trace.push({ phase: "gate", skill: mapped, ok: gate.ok, reason: gate.reason, tier: gate.tier ?? def?.tier });
+      if (!gate.ok) return { status: "refused", trace, reply: { kind: "plan", plan: presetPlan } };
+      if (gate.needsVote || gate.escalate) return { status: "blocked:vote", trace, reply: { kind: "plan", plan: presetPlan } };
+      if (gate.adminSignature || gate.adminOnly) return { status: "blocked:admin", trace, reply: { kind: "plan", plan: presetPlan } };
+      const result = executeSkill(mapped, planToArgs(presetPlan), gate, opts);
+      trace.push({ phase: "act", ...result });
+      trace.push({ phase: "observe", note: "state refreshed" });
+      return { status: "done", trace, reply: { kind: "plan", plan: presetPlan }, skill: mapped, steps: result.steps };
+    }
+
     if (extractor) {
       try {
         const out = await extractor(currentPrompt, state);
@@ -116,6 +137,8 @@ function planToArgs(plan) {
       return { change: p.change };
     case "pause":
       return { mode: p.mode };
+    case "frame":
+      return { pattern: p.pattern, calls: p.calls, value: p.value };
     default:
       return {};
   }

@@ -53,6 +53,7 @@ const ACTION_CODES: Record<ActionType, number> = {
   update_policy: 0,
   pause: 0,
   vote: 0,
+  frame: 0, // EIP-8141 frame plan; action type is carried in the plan params
 };
 
 const TABS: { id: Tab; label: string; icon: typeof Users }[] = [

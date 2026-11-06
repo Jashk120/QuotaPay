@@ -29,6 +29,7 @@ export type LlmAction =
   | { action: "propose"; draft: string }
   | { action: "update_policy"; change: string }
   | { action: "pause"; mode: "pause" | "resume" }
+  | { action: "frame"; pattern: string; calls?: number; value?: string }
   | { action: "summarize" };
 
 export const LLM_ACTIONS: ActionType[] = [
@@ -125,7 +126,7 @@ export function buildLlmSystemPrompt(state: DaoState): string {
     .join("\n");
   return [
     "You are the DAO operator intent parser. Output ONE JSON object only, no prose.",
-    'Shape: {"action": "<one of add_members|remove_member|change_role|pay|acquire_asset|dispose_asset|propose|update_policy|pause|summarize>", "args": {...}}.',
+    'Shape: {"action": "<one of add_members|remove_member|change_role|pay|acquire_asset|dispose_asset|propose|update_policy|pause|frame|summarize>", "args": {...}}.',
     "Args by action:",
     '- add_members: {"names": ["Priya", ...]}',
     '- remove_member: {"name": "Arjun"}',
@@ -136,6 +137,7 @@ export function buildLlmSystemPrompt(state: DaoState): string {
     '- propose: {"draft": "free text"}',
     '- update_policy: {"change": "free text"}',
     '- pause: {"mode": "pause|resume"}',
+    '- frame: {"pattern": "<frame pattern>", "calls": 1, "value": "<wei>"}',
     "- summarize: {}",
     "Rules: never invent member/asset names; use names from the lists below.",
     "Never output addresses, calldata, signatures, or private keys.",
@@ -210,6 +212,19 @@ export function parseLlmActionJson(text: string): LlmAction | null {
     case "pause": {
       const mode = str(args.mode).toLowerCase();
       return { action, mode: mode === "resume" ? "resume" : "pause" };
+    }
+    case "frame": {
+      const pattern = str(args.pattern);
+      if (!pattern) return null;
+      const calls = Number.isFinite(num(args.calls)) ? Math.min(32, Math.max(1, Math.round(num(args.calls)))) : 1;
+      const rawValue = args.value;
+      const value =
+        typeof rawValue === "string" && /^\d+$/.test(rawValue)
+          ? rawValue
+          : Number.isFinite(num(rawValue))
+            ? String(Math.round(num(rawValue)))
+            : undefined;
+      return { action, pattern, calls, value };
     }
     case "summarize":
       return { action: "summarize" };

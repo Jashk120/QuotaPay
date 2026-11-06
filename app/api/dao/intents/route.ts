@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server";
-import { parsePrompt } from "@/lib/dao/agent.mjs";
+import { runAgentIntent } from "@/lib/dao/agentService";
 import { db, isDbConfigured } from "@/lib/dao/db";
 import { isTestMode, verifyIntentAuth } from "@/lib/dao/intents";
 import { withHashes } from "@/lib/dao/hash";
-import type { DaoState } from "@/lib/dao/types";
+import type { AgentReply, DaoState } from "@/lib/dao/types";
 
 function rid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Finalize a reply: hash the plan so the DB row matches what the UI shows. */
+function finalize(prompt: string, reply: AgentReply): AgentReply {
+  if (reply.kind === "plan") return { kind: "plan", plan: withHashes(prompt, reply.plan) };
+  return reply;
+}
+
 /** POST /api/dao/intents { prompt, state, address?, signature?, nonce? }
- *  Persists the intent for the VPS worker. In test mode (AGENT_TEST_MODE=true)
- *  no signature is required and the reply is computed inline so the UI works
- *  with no worker running. */
+ *  Runs the LLM/policy engine once, persists the intent for the VPS worker,
+ *  and returns the reply inline. Worker and UI therefore agree on the plan. */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as {
     prompt?: unknown;
@@ -28,27 +33,27 @@ export async function POST(req: Request) {
   const state = body.state as DaoState;
   const address = typeof body.address === "string" ? body.address : undefined;
   const signature = typeof body.signature === "string" ? body.signature : undefined;
-  const nonce =
-    typeof body.nonce === "string" && body.nonce ? body.nonce : rid("n");
+  const nonce = typeof body.nonce === "string" && body.nonce ? body.nonce : rid("n");
 
   const auth = await verifyIntentAuth({ prompt, nonce, address, signature });
   if (!auth.ok) return NextResponse.json({ error: auth.reason }, { status: 401 });
 
   const testMode = isTestMode();
-  const reply = withHashes(prompt, (parsePrompt(prompt, state) as { kind: "plan"; plan: { id: string } } as never) as never) as never;
+  const result = await runAgentIntent(prompt, state);
+  const reply = finalize(prompt, result.reply);
 
-  // No DB (local dev): behave like the old inline parser.
+  // No DB (local dev): behave like the inline agent route.
   if (!isDbConfigured()) {
-    return NextResponse.json({ id: null, reply, source: "local", testMode });
+    return NextResponse.json({ id: null, reply, source: result.source, testMode });
   }
 
   const id = rid("intent");
   const sql = db();
   await sql`
     insert into agent_intents (id, prompt, state_snapshot, address, signature, nonce, test_mode, status, reply, source)
-    values (${id}, ${prompt}, ${JSON.stringify(state ?? {})}, ${address ?? null}, ${signature ?? null}, ${nonce}, ${testMode}, ${"queued"}, ${JSON.stringify(reply ?? {})}, ${"local:inline"})
+    values (${id}, ${prompt}, ${JSON.stringify(state ?? {})}, ${address ?? null}, ${signature ?? null}, ${nonce}, ${testMode}, ${"queued"}, ${JSON.stringify(reply)}, ${result.source})
   `;
-  return NextResponse.json({ id, reply, source: "local:inline", testMode });
+  return NextResponse.json({ id, reply, source: result.source, testMode });
 }
 
 /** GET /api/dao/intents?limit=20 — recent intents for the activity view. */
