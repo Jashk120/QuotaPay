@@ -29,6 +29,7 @@ const LOCAL_SOURCES = {
   "factories/DaoCoreFactory.sol": "contracts/factories/DaoCoreFactory.sol",
   "factories/AgentAccountFactory.sol": "contracts/factories/AgentAccountFactory.sol",
   "factories/AssetModuleFactory.sol": "contracts/factories/AssetModuleFactory.sol",
+  "probe/FrameReadProbe.sol": "contracts/probe/FrameReadProbe.sol",
   "mocks.sol": "test/helpers/mocks.sol",
 };
 
@@ -128,6 +129,7 @@ export function compileAll() {
     "DaoCoreFactory",
     "AgentAccountFactory",
     "AssetModuleFactory",
+    "FrameReadProbe",
   ]) {
     if (!artifacts[need] || !artifacts[need].bytecode || artifacts[need].bytecode === "0x") {
       throw new Error(`missing bytecode for ${need}`);
