@@ -37,6 +37,7 @@ const STATE_PATH =
 const FUND_WEI = parseEther("0.05");
 const PAYMASTER_FUND_WEI = parseEther("0.05");
 const MAX_SPONSOR_COST = parseEther("0.002");
+const STAKE_WEI = parseEther(process.env.DAO_STAKE_ETH ?? "0.012");
 
 function loadKey() {
   if (process.env.DEPLOYER_KEY) return process.env.DEPLOYER_KEY;
@@ -217,10 +218,36 @@ async function main() {
   });
   await sendLegacy(account, { to: usdc, data: mintData });
 
+  console.log("[5/7] agent gas paymaster");
+  const gasPaymaster = await deploy(
+    account,
+    artifacts,
+    "DaoGasPaymaster",
+    [
+      account.address,
+      account.address,
+      REGISTRY,
+      created.daoCore,
+      MAX_SPONSOR_COST,
+      86_400,
+    ],
+    PAYMASTER_FUND_WEI,
+  );
+  const gasStakeData = encodeFunctionData({
+    abi: artifacts.DaoGasPaymaster.abi,
+    functionName: "stake",
+    args: [86_400],
+  });
+  await sendLegacy(account, {
+    to: gasPaymaster,
+    data: gasStakeData,
+    value: STAKE_WEI,
+  });
+
   let voteVerifier = null;
   let votePaymaster = null;
   if (process.env.DAO_SKIP_VOTE_PAYMASTER !== "1") {
-    console.log("[5/6] ZK vote verifier + paymaster");
+    console.log("[6/7] ZK vote verifier + paymaster");
     voteVerifier = await deploy(account, artifacts, "DaoVoteVerifier");
     votePaymaster = await deploy(
       account,
@@ -237,6 +264,17 @@ async function main() {
       ],
       PAYMASTER_FUND_WEI,
     );
+    const voteStakeData = encodeFunctionData({
+      abi: artifacts.DaoVotePaymaster.abi,
+      functionName: "stake",
+      args: [86_400],
+    });
+    await sendLegacy(account, {
+      to: votePaymaster,
+      data: voteStakeData,
+      value: STAKE_WEI,
+    });
+
     const setData = encodeFunctionData({
       abi: artifacts.DaoCore.abi,
       functionName: "setVotePaymaster",
@@ -244,8 +282,9 @@ async function main() {
     });
     await sendLegacy(account, { to: created.daoCore, data: setData });
   } else {
-    console.log("[5/6] skipping vote paymaster");
+    console.log("[6/7] skipping vote paymaster");
   }
+  console.log("[7/7] writing deployment record");
 
   const record = {
     chainId: CHAIN_ID,
@@ -264,6 +303,7 @@ async function main() {
     usdc,
     assetId,
     fundWei: FUND_WEI.toString(),
+    gasPaymaster,
     voteVerifier,
     votePaymaster,
     deployedAt: new Date().toISOString(),
