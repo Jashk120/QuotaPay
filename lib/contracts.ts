@@ -16,6 +16,10 @@ export const devnet = defineChain({
   name: "QuotaPay devnet",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: [config.rpcUrl] } },
+  blockExplorers: {
+    default: { name: "QuotaPay explorer", url: config.explorerUrl },
+  },
+  testnet: true,
 });
 
 /** Build a read client, optionally routed through anon-rpc's fetch. */

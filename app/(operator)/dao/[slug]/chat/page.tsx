@@ -4,7 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { Address } from "viem";
-import { useSendTransaction, useSignMessage } from "wagmi";
+import {
+  useAccount,
+  useSendTransaction,
+  useSignMessage,
+  useSwitchChain,
+  useWalletClient,
+} from "wagmi";
 import {
   Boxes,
   Coins,
@@ -27,8 +33,8 @@ import { ProposalsPanel } from "@/components/dao/proposals-panel";
 import { TierBadge } from "@/components/dao/tier-badge";
 import { TransactionFeed } from "@/components/dao/transaction-feed";
 import { TreasuryPanel } from "@/components/dao/treasury-panel";
-import { isDaoChainConfigured } from "@/lib/config";
-import { publicClient } from "@/lib/contracts";
+import { config, isDaoChainConfigured } from "@/lib/config";
+import { devnet, publicClient } from "@/lib/contracts";
 import { parsePrompt } from "@/lib/dao/agent.mjs";
 import { daoCoreAbi } from "@/lib/daoAbis.mjs";
 import { money, percent } from "@/lib/dao/format";
@@ -87,6 +93,9 @@ export default function DaoConsolePage() {
   const { sendTransactionAsync } = useSendTransaction();
   const { signMessageAsync } = useSignMessage();
   const { address: walletAddress } = useConnectedWallet();
+  const { chainId: activeChainId } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
   const [tab, setTab] = useState<Tab>("members");
   const [items, setItems] = useState<ChatItem[]>([]);
   const [plans, setPlans] = useState<Record<string, Plan>>({});
@@ -206,7 +215,42 @@ export default function DaoConsolePage() {
     }
   }
 
+  async function ensureChain(): Promise<boolean> {
+    if (!isDaoChainConfigured) {
+      setChainMessage("NEXT_PUBLIC_DAO_CORE is not configured.");
+      return false;
+    }
+    if (activeChainId === config.chainId) return true;
+    try {
+      await switchChainAsync({ chainId: config.chainId });
+      return true;
+    } catch (cause) {
+      const code = (cause as { code?: number })?.code;
+      if (code === 4902 && walletClient) {
+        try {
+          await walletClient.addChain({ chain: devnet });
+          await switchChainAsync({ chainId: config.chainId });
+          return true;
+        } catch (addCause) {
+          setChainMessage(
+            `Could not add chain ${config.chainId}: ${
+              addCause instanceof Error ? addCause.message : String(addCause)
+            }`,
+          );
+          return false;
+        }
+      }
+      setChainMessage(
+        `Switch MetaMask to chain ${config.chainId} (QuotaPay devnet) before signing. ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+      );
+      return false;
+    }
+  }
+
   async function requestSignature(plan: Plan, call?: PreparedCall) {
+    if (!(await ensureChain())) return;
     let prepared = call ?? null;
     if (!prepared && isDaoChainConfigured) {
       const result = await preparePlan(plan, state);
@@ -256,6 +300,7 @@ export default function DaoConsolePage() {
 
   /** Submit the prepared DaoCore call through the agent (server-side key). */
   async function submitCall(plan: Plan, call: PreparedCall, auth?: AdminAuth) {
+    if (!(await ensureChain())) return;
     setBusyPlanId(plan.id);
     setChainMessage(null);
     try {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Address } from "viem";
-import { useSignTypedData } from "wagmi";
+import { useAccount, useSignTypedData, useSwitchChain } from "wagmi";
 import { Loader2, PenLine, ShieldAlert, Wallet, X } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -49,8 +49,11 @@ export function AdminSignatureDialog({
 }) {
   const { address, isConnected, connect } = useConnectedWallet();
   const { signTypedDataAsync } = useSignTypedData();
+  const { chainId } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
   const [status, setStatus] = useState<"idle" | "signing" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const wrongChain = isConnected && chainId !== config.chainId;
 
   useEffect(() => {
     if (!request) return;
@@ -189,7 +192,7 @@ export function AdminSignatureDialog({
             {isConnected ? (
               <Button
                 onClick={() => void signWithWallet()}
-                disabled={status === "signing"}
+                disabled={status === "signing" || wrongChain}
                 data-testid="dao-sign-wallet"
               >
                 {status === "signing" ? (
@@ -204,7 +207,28 @@ export function AdminSignatureDialog({
                 <Wallet className="h-4 w-4" /> Connect admin wallet
               </Button>
             )}
+            {wrongChain ? (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  void switchChainAsync({ chainId: config.chainId })
+                }
+              >
+                Switch to chain {config.chainId}
+              </Button>
+            ) : null}
           </div>
+
+          {wrongChain ? (
+            <div className="flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-900">
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Your wallet is on chain {chainId}. MetaMask will not sign an
+                EIP-712 request whose domain chainId is {config.chainId} while a
+                different chain is active. Switch to {config.chainId} first.
+              </span>
+            </div>
+          ) : null}
 
           <div className="flex items-start gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
