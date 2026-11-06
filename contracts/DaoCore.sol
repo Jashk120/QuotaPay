@@ -488,7 +488,7 @@ contract DaoCore {
         uint256 amount,
         bytes32 promptHash,
         bytes32 planHash
-    ) external onlyGovernance nonReentrant {
+    ) external onlyGovernance {
         require(to != address(0), "to=0");
         require(tokenCaps[token].allowed, "token not allowed");
         _transfer(token, to, amount);
@@ -526,10 +526,11 @@ contract DaoCore {
     }
 
     /// Tier 3: acquire above the asset cap, reached through a proposal.
+    // No nonReentrant here: executeProposal already holds the guard while it
+    // self-calls this function through the proposal.
     function acquireAssetAboveCap(bytes32 assetId, uint256 amount)
         external
         onlyGovernance
-        nonReentrant
     {
         _acquire(assetId, amount, true);
     }
