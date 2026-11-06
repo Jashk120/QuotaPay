@@ -37,6 +37,15 @@ function canonicalPrompt(a: LlmAction, fallback: string): string {
   }
 }
 
+/** Stable per-process session id for OpenCode Go routing/prompt-cache. */
+let cachedSession: string | null = null;
+function stableSessionId(): string {
+  if (!cachedSession) {
+    cachedSession = `ses_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+  }
+  return cachedSession;
+}
+
 async function callChatCompletions(
   baseUrl: string,
   apiKey: string,
@@ -49,6 +58,11 @@ async function callChatCompletions(
     "content-type": "application/json",
     authorization: `Bearer ${apiKey}`,
   };
+  // OpenCode Go requires a stable session id for routing/prompt-cache reuse.
+  if (provider === "opencode-go") {
+    headers["x-opencode-session"] =
+      process.env.OPENCODE_GO_SESSION || stableSessionId();
+  }
   // OpenRouter attribution (optional, harmless elsewhere).
   if (provider === "openrouter") {
     const site = process.env.OPENROUTER_SITE_URL || "http://localhost:3000";
