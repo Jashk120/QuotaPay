@@ -53,9 +53,11 @@ const secret = env.DEMO_ZK_SECRET;
 const leavesState = fs.existsSync("deployments/zk-leaves.json")
   ? JSON.parse(fs.readFileSync("deployments/zk-leaves.json", "utf8"))
   : null;
-const leavesJson =
-  env.DEMO_ZK_LEAVES ??
-  (leavesState?.leaves ? JSON.stringify(leavesState.leaves) : undefined);
+// deployments/zk-leaves.json is canonical (zk-admin keeps it current);
+// the env var is only a fallback for setups without the file.
+const leavesJson = leavesState?.leaves
+  ? JSON.stringify(leavesState.leaves)
+  : env.DEMO_ZK_LEAVES;
 const paymaster = env.NEXT_PUBLIC_ZK_PAYMASTER ?? leavesState?.paymaster;
 const epoch = env.NEXT_PUBLIC_ZK_EPOCH ?? leavesState?.epoch ?? "0";
 const chainId = Number(

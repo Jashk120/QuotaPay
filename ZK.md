@@ -61,10 +61,11 @@ The old `1_000_000` was a placeholder. The measured numbers on this tree:
 | Measurement | Gas |
 |---|---|
 | `verifyProof` estimate (7 public inputs) | **258,738** |
-| `verifyProof` actual `gasUsed` | **255,928** |
+| `verifyProof` actual `gasUsed` (ganache) | **255,928** |
 | Groth16 pairing component (4 pairs, EIP-1108) | 181,000 |
 | Public-input MSM (7 × `ecMul` + `ecAdd`) | ~43,000 |
 | Verifier calldata/assembly overhead | ~30,000 |
+| **Charge frame on-chain (ethrex, block `0x41e`)** | **291,546 exec / 293,504 state** |
 
 The declared validation prefix for the ZK path:
 
@@ -79,6 +80,36 @@ The declared validation prefix for the ZK path:
 
 `MAX_VERIFY_GAS_STAKED = 500_000` leaves ~140k (39%) headroom. The old 1M was
 ~2.8× the measured need. The sidecar patch now uses 500k with this rationale.
+
+**On-chain Groth16 verification is now proven.** Via the local sidecar relay
+(500k staked cap + full precompile list), a ZK sponsored tx mined on the
+public chain: `0x0ccb70cc…` in block `0x41e`, payer = `ZkPaymaster`, receipt
+verified on the public RPC. The on-chain charge frame used 291,546 execution
+gas (vs 255,928 on ganache). A replay with the same credential is refused
+before proving (`identity nullifier is already spent`).
+
+**The stock public mempool still blocks it — twice.** Probed 2026-11-06, both
+`altmempool.forshtat.com/rpc` and `altmempoolgateway.forshtat.com/rpc`:
+
+1. Gas: `prefix gas budget exceeded: 617800 > 100000 (MAX_VERIFY_GAS)` — the
+   100k staked cap is still enforced. The limit was **not** removed.
+2. Precompiles: even if the cap were lifted, the paymaster is rejected with
+   `payer accesses un-deployed contract address 0x06` (`ecAdd`; `ecMul`
+   `0x07` and pairing `0x08` would follow). The public allowlist does not
+   include the BN254 precompiles.
+
+Both are host-side config: raise the staked cap to the measured 500k and add
+`0x06`/`0x07`/`0x08` to the precompile allowlist. Until then the working path
+is the local sidecar relay, which lands on the same public chain.
+
+**snarkjs verifiers need a patch for validation.** The generated code forwards
+precompile gas with `sub(gas(), 2000)`, but `GAS` is a banned opcode in the
+validation prefix (the charge frame runs as the payer), so the stock output is
+rejected with `payer uses banned opcode: GAS`. `scripts/zk-setup.mjs` patches
+the three `staticcall`s to fixed EIP-1108 costs (30k for `ecMul`/`ecAdd`,
+200k for the 4-pair check). Consumption is unchanged — precompiles charge
+fixed costs, not the forwarded amount. T12 re-verifies the patched bytecode
+(258,663 estimate, still under the 315k guard).
 
 **Stock 100k cannot fit an on-chain Groth16 verifier.** The pairing check alone
 is 181k. A 100k deployment would need off-chain verification with a bonded
