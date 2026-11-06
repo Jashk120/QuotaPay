@@ -223,6 +223,10 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
           .setTokenCap.staticCall(ethers.ZeroAddress, true, 1n, 1n, 1n),
       "not governance"
     );
+    await expectRevert(
+      () => core.connect(admin).setFrameEnforced.staticCall(false),
+      "not governance"
+    );
   });
 
   await t.test("the admin can pause the agent directly or through DaoCore", async () => {

@@ -144,11 +144,6 @@ contract DaoCore {
         uint256 amount,
         uint256 spentThisPeriod
     );
-    event AssetApproval(
-        address indexed token,
-        address indexed spender,
-        uint256 amount
-    );
     event ActionExecuted(
         bytes32 indexed actionHash,
         uint8 tier,
@@ -222,6 +217,7 @@ contract DaoCore {
         governanceSelector[this.setAgentSigner.selector] = true;
         governanceSelector[this.setAdmin.selector] = true;
         governanceSelector[this.setVotePaymaster.selector] = true;
+        governanceSelector[this.setFrameEnforced.selector] = true;
         governanceSelector[this.spendAboveCap.selector] = true;
         governanceSelector[this.acquireAssetAboveCap.selector] = true;
 
@@ -239,8 +235,13 @@ contract DaoCore {
         // Default agent policy. The factory cannot know these addresses before
         // deployment, so the DAO installs the rules for its own selectors.
         IAgentAccount(agentAccount_).setRule(address(this), this.addMembers.selector, true, TIER_AGENT);
+        IAgentAccount(agentAccount_).setRule(
+            address(this),
+            this.addMembersAuthorized.selector,
+            true,
+            TIER_ADMIN
+        );
         IAgentAccount(agentAccount_).setRule(address(this), this.spend.selector, true, TIER_AGENT);
-        IAgentAccount(agentAccount_).setRule(address(this), this.approveAsset.selector, true, TIER_AGENT);
         IAgentAccount(agentAccount_).setRule(address(this), this.acquireAsset.selector, true, TIER_AGENT);
         IAgentAccount(agentAccount_).setRule(address(this), this.createProposal.selector, true, TIER_AGENT);
         IAgentAccount(agentAccount_).setRule(address(this), this.executeProposal.selector, true, TIER_AGENT);
@@ -510,19 +511,6 @@ contract DaoCore {
         );
     }
 
-    function approveAsset(
-        address token,
-        address spender,
-        uint256 amount
-    ) external onlyAgent {
-        require(tokenCaps[token].allowed, "token not allowed");
-        require(
-            IERC20(token).approve(spender, amount),
-            "approve failed"
-        );
-        emit AssetApproval(token, spender, amount);
-    }
-
     /// Tier 1: acquire an allowlisted asset within its cap. One SENDER call,
     /// and the approval is always reset to zero (spec §9).
     function acquireAsset(bytes32 assetId, uint256 amount)
@@ -758,7 +746,11 @@ contract DaoCore {
         emit AdminSet(previous, next);
     }
 
-    function setFrameEnforced(bool enforced) external onlyAdmin {
+    /// Tier 3: the frame-introspection fallback is part of the validation
+    /// policy, so switching it off needs the same member vote as any other
+    /// policy change (spec §4.1, §6.1). The deploy config sets the initial
+    /// value; the admin's emergency valve is `pauseAgent`.
+    function setFrameEnforced(bool enforced) external onlyGovernance {
         IAgentAccount(agentAccount).setFrameEnforced(enforced);
     }
 

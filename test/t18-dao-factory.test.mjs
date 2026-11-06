@@ -129,6 +129,15 @@ test("T18 DaoFactory: deploy, wire and isolate DAOs", async (t) => {
       (
         await account.rules(
           coreAddr,
+          core.interface.getFunction("addMembersAuthorized").selector
+        )
+      ).tier,
+      2n
+    );
+    assert.equal(
+      (
+        await account.rules(
+          coreAddr,
           core.interface.getFunction("executeProposal").selector
         )
       ).allowed,

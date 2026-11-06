@@ -175,7 +175,8 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
   Membership and asset actions carry zero hashes; the off-chain feed can label
   them from the plan store, but the on-chain event is not complete for those
   actions yet.
-- `frameEnforced` defaults to the deployment config. If the §7.3 probe shows
-  that chain 1337 cannot read SENDER frames during VERIFY, deploy with
-  `DAO_FRAME_ENFORCED=false`; `DaoCore` remains the enforcement point.
+- `frameEnforced` is set by the deployment config; changing it later is a
+  tier-3 proposal because it is part of the validation policy. If the §7.3
+  probe shows that chain 1337 cannot read SENDER frames during VERIFY, deploy
+  with `DAO_FRAME_ENFORCED=false`; `DaoCore` remains the enforcement point.
 - The demo asset and price are mocks. No real RWA custody or oracle.
