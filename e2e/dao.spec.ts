@@ -84,7 +84,9 @@ test("invite acceptance and DAO creation update local state", async ({
   await page.getByRole("button", { name: /interpret config/i }).click();
   await expect(page.getByLabel("Treasury (USDC)")).toHaveValue("5000");
   await page.getByTestId("dao-deploy").click();
-  await page.getByTestId("dao-simulate-signature").click();
+  // No wallet connected in the test browser: the signature step is skipped.
+  const simulate = page.getByTestId("dao-simulate-signature");
+  if (await simulate.isVisible().catch(() => false)) await simulate.click();
   await expect(page).toHaveURL(/\/$/, { timeout: 20_000 });
   await expect(
     page.getByRole("heading", { name: /New Collective · operator console/i }),

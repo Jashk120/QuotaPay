@@ -43,18 +43,10 @@ const DEPLOY_STEPS = [
   "Fund the treasury and emit the creation event",
 ];
 
-function readAmount(text: string, pattern: RegExp, fallback: number) {
-  const match = text.match(pattern);
-  if (!match) return fallback;
-  const value = Number(match[1].replace(/,/g, ""));
-  if (!Number.isFinite(value)) return fallback;
-  return /^k$/i.test(match[2] || "") ? value * 1000 : value;
-}
-
 export default function NewDaoPage() {
   const router = useRouter();
   const { replace } = useDaoState();
-  const { address } = useConnectedWallet();
+  const { address, isConnected } = useConnectedWallet();
 
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [name, setName] = useState("New Collective");
@@ -64,27 +56,56 @@ export default function NewDaoPage() {
   const [rateLimit, setRateLimit] = useState("10");
   const [windowHours, setWindowHours] = useState("48");
   const [interpreted, setInterpreted] = useState(false);
+  const [source, setSource] = useState<string | null>(null);
+  const [interpreting, setInterpreting] = useState(false);
   const [signingRequest, setSigningRequest] = useState<SignatureRequest | null>(
     null,
   );
   const [deployStep, setDeployStep] = useState(-1);
   const [deploying, setDeploying] = useState(false);
 
-  function interpret() {
-    const nextTreasury = readAmount(
-      prompt,
-      /([\d,.]+)\s*(k)?\s*(?:usdc\s*)?treasury/i,
-      5000,
-    );
-    const nextCap = readAmount(
-      prompt,
-      /(?:up to|cap(?:ped)?\s+at)\s*\$?([\d,.]+)\s*(k)?/i,
-      200,
-    );
-    setTreasury(String(nextTreasury));
-    setPerTx(String(nextCap));
-    setPerPeriod(String(Math.max(nextCap * 5, nextCap)));
-    setInterpreted(true);
+  async function interpret() {
+    setInterpreting(true);
+    try {
+      const res = await fetch("/api/dao/config", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) throw new Error(`config API ${res.status}`);
+      const json = (await res.json()) as {
+        config: {
+          name: string;
+          treasuryUsdc: number;
+          perTxCap: number;
+          perPeriodCap: number;
+          addMemberRateLimit: number;
+          votingWindowHours: number;
+        };
+        source?: string;
+      };
+      setName(json.config.name);
+      setTreasury(String(json.config.treasuryUsdc));
+      setPerTx(String(json.config.perTxCap));
+      setPerPeriod(String(json.config.perPeriodCap));
+      setRateLimit(String(json.config.addMemberRateLimit));
+      setWindowHours(String(json.config.votingWindowHours));
+      setSource(json.source ?? null);
+    } catch {
+      // Offline: the deterministic parser is in the same module the route uses.
+      const { parseDaoConfig } = await import("@/lib/dao/config");
+      const cfg = parseDaoConfig(prompt);
+      setName(cfg.name);
+      setTreasury(String(cfg.treasuryUsdc));
+      setPerTx(String(cfg.perTxCap));
+      setPerPeriod(String(cfg.perPeriodCap));
+      setRateLimit(String(cfg.addMemberRateLimit));
+      setWindowHours(String(cfg.votingWindowHours));
+      setSource("local");
+    } finally {
+      setInterpreted(true);
+      setInterpreting(false);
+    }
   }
 
   function configSnapshot() {
@@ -99,6 +120,12 @@ export default function NewDaoPage() {
   }
 
   function openSignature() {
+    // No wallet? Skip the signature step entirely. The signature is only the
+    // owner's consent for a real deploy; local demo state needs no key.
+    if (!isConnected) {
+      void deploy();
+      return;
+    }
     const snapshot = configSnapshot();
     setSigningRequest({
       title: `Create ${snapshot.name}`,
@@ -160,8 +187,8 @@ export default function NewDaoPage() {
             <Sparkles className="h-4 w-4 text-primary" /> 1. Describe the DAO
           </CardTitle>
           <CardDescription>
-            The parser is deterministic in this build. It only reads the treasury
-            and spend cap.
+            The agent reads your description and fills the config. No wallet is
+            required to plan or create a local DAO.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -173,13 +200,23 @@ export default function NewDaoPage() {
             className="w-full resize-none rounded-lg border border-input bg-background/60 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={interpret}>
-              <Wand2 className="h-4 w-4" /> Interpret config
+            <Button size="sm" onClick={() => void interpret()} disabled={interpreting}>
+              {interpreting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Wand2 className="h-4 w-4" />
+              )}
+              Interpret config
             </Button>
             {interpreted ? (
               <Badge variant="success">
                 parsed {money(Number(treasury))} treasury · {money(Number(perTx))}{" "}
                 cap
+              </Badge>
+            ) : null}
+            {source ? (
+              <Badge variant="outline" title="Config extractor">
+                {source.startsWith("llm:") ? source : "parser: local"}
               </Badge>
             ) : null}
           </div>
@@ -283,6 +320,11 @@ export default function NewDaoPage() {
             )}
             Sign config &amp; deploy
           </Button>
+          <p className="text-xs text-muted-foreground">
+            {isConnected
+              ? "Your wallet signs the config hash before the deploy."
+              : "No wallet connected — the DAO is created locally without a signature. Connect a wallet only when you deploy on-chain."}
+          </p>
 
           {deployStep >= 0 ? (
             <div className="space-y-2 rounded-lg border border-border/60 bg-background/40 p-3">
