@@ -14,7 +14,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { rootAndPath } from "../lib/zk/tree.mjs";
+import { leafHash, rootAndPath } from "../lib/zk/tree.mjs";
 
 function loadEnv() {
   const env = {};
@@ -50,11 +50,31 @@ for (const [from, to] of assets) {
 }
 
 const secret = env.DEMO_ZK_SECRET;
-const leavesJson = env.DEMO_ZK_LEAVES;
-const paymaster = env.NEXT_PUBLIC_ZK_PAYMASTER;
+const leavesState = fs.existsSync("deployments/zk-leaves.json")
+  ? JSON.parse(fs.readFileSync("deployments/zk-leaves.json", "utf8"))
+  : null;
+const leavesJson =
+  env.DEMO_ZK_LEAVES ??
+  (leavesState?.leaves ? JSON.stringify(leavesState.leaves) : undefined);
+const paymaster = env.NEXT_PUBLIC_ZK_PAYMASTER ?? leavesState?.paymaster;
+const epoch = env.NEXT_PUBLIC_ZK_EPOCH ?? leavesState?.epoch ?? "0";
+const chainId = Number(
+  env.NEXT_PUBLIC_CHAIN_ID ?? leavesState?.chainId ?? "1337",
+);
 if (secret && leavesJson && paymaster) {
   const leaves = JSON.parse(leavesJson).map(BigInt);
-  const { root, pathElements, pathIndices } = await rootAndPath(leaves, 0);
+  const demoLeaf = await leafHash({
+    secret: BigInt(secret),
+    paymaster: BigInt(paymaster),
+    chainId,
+  });
+  const index = leaves.findIndex((v) => v === demoLeaf);
+  if (index < 0) {
+    throw new Error(
+      "DEMO_ZK_SECRET is not in deployments/zk-leaves.json; add its leaf or pick the right secret",
+    );
+  }
+  const { root, pathElements, pathIndices } = await rootAndPath(leaves, index);
   if (env.NEXT_PUBLIC_ZK_ROOT && BigInt(env.NEXT_PUBLIC_ZK_ROOT) !== root) {
     console.warn(
       `warning: published root ${root} differs from NEXT_PUBLIC_ZK_ROOT ${env.NEXT_PUBLIC_ZK_ROOT}`,
@@ -64,12 +84,13 @@ if (secret && leavesJson && paymaster) {
     _warning:
       "devnet demo secret. Do not publish this file on a value-bearing network.",
     secret,
+    index,
     pathElements: pathElements.map((v) => v.toString()),
     pathIndices,
     root: root.toString(),
-    epoch: env.NEXT_PUBLIC_ZK_EPOCH ?? "0",
+    epoch,
     paymaster,
-    chainId: Number(env.NEXT_PUBLIC_CHAIN_ID ?? "1337"),
+    chainId,
   };
   fs.writeFileSync(
     path.join(OUT, "demo-credential.json"),

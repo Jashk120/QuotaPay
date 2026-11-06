@@ -228,6 +228,21 @@ async function main() {
     "deployments/zk-1337.json",
     JSON.stringify(deployment, null, 2) + "\n",
   );
+  // Canonical authorized-set file for scripts/zk-admin.mjs. Public commitments
+  // only; the secrets stay with the employees.
+  fs.writeFileSync(
+    "deployments/zk-leaves.json",
+    JSON.stringify(
+      {
+        chainId: CHAIN_ID,
+        paymaster,
+        epoch: "0",
+        leaves: leaves.map((v) => v.toString()),
+      },
+      null,
+      2,
+    ) + "\n",
+  );
 
   upsertEnv(".env.local", {
     NEXT_PUBLIC_ZK_PAYMASTER: paymaster,

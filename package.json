@@ -18,6 +18,7 @@
     "zk:deploy": "node scripts/deploy-zk.mjs",
     "zk:sponsor": "node scripts/zk-sponsor.mjs",
     "zk:publish": "node scripts/zk-publish.mjs",
+    "zk:admin": "node scripts/zk-admin.mjs",
     "test": "node --test \"test/*.test.mjs\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
@@ -46,7 +47,6 @@
     "autoprefixer": "^10.4.20",
     "circom2": "^0.2.23",
     "circomlib": "^2.0.5",
-    "circomlibjs": "^0.1.7",
     "ethers": "^6.13.4",
     "ganache": "^7.9.2",
     "postcss": "^8.4.49",
