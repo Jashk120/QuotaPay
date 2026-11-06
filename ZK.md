@@ -54,7 +54,12 @@ so without it a proof could be replayed under a different `tx.sender`.
 | `test/t13-zk-paymaster.test.mjs` | Config, custody, entrypoint gates |
 | `test/t14-zk-client.test.mjs` | Browser witness/nullifier matches the circuit proof |
 
-## Gas: why the staked cap is 500k
+## Gas: why the sidecar budget is 500k
+
+The sidecar URL is configured in `.env` as `NEXT_PUBLIC_RPC_URL` /
+`NEXT_PUBLIC_GATEWAY_URL` (see `.env.example`). The public alt-mempool keeps
+the EIP default `MAX_VERIFY_GAS = 100_000`; the self-hosted sidecar is
+configured with a ~500k validation budget and the BN254 precompiles.
 
 The old `1_000_000` was a placeholder. The measured numbers on this tree:
 
@@ -78,11 +83,12 @@ The declared validation prefix for the ZK path:
 359,800  declared prefix
 ```
 
-`MAX_VERIFY_GAS_STAKED = 500_000` leaves ~140k (39%) headroom. The old 1M was
-~2.8× the measured need. The sidecar patch now uses 500k with this rationale.
+The sidecar's validation budget is `500_000`, which leaves ~140k (39%)
+headroom. The old 1M was ~2.8× the measured need. The sidecar patch uses 500k
+with this rationale.
 
 **On-chain Groth16 verification is now proven.** Via the local sidecar relay
-(500k staked cap + full precompile list), a ZK sponsored tx mined on the
+(~500k validation budget + full precompile list), a ZK sponsored tx mined on the
 public chain: `0x0ccb70cc…` in block `0x41e`, payer = `ZkPaymaster`, receipt
 verified on the public RPC. The on-chain charge frame used 291,546 execution
 gas (vs 255,928 on ganache). A replay with the same credential is refused
@@ -98,7 +104,7 @@ before proving (`identity nullifier is already spent`).
    `0x07` and pairing `0x08` would follow). The public allowlist does not
    include the BN254 precompiles.
 
-Both are host-side config: raise the staked cap to the measured 500k and add
+Both are host-side config: raise the public node's validation budget to ~500k and add
 `0x06`/`0x07`/`0x08` to the precompile allowlist. Until then the working path
 is the local sidecar relay, which lands on the same public chain.
 
@@ -268,7 +274,7 @@ code-hash exemption is requested (unlike the canonical-pool proposals) and no
 per-contract allowlist: `0x06`/`0x07`/`0x08` are protocol precompiles,
 permissionless by construction. Trace compliance of the current build:
 
-- staked payer (0.012 ETH ≥ 0.01 minimum), declared prefix ~346k ≤ 500k cap;
+- declared prefix ~346k, inside the sidecar's ~500k budget (the public 100k cap is the blocker);
 - reads: tx fields + sender + paymaster's **own** storage (root, epoch,
   nullifiers) — the staked-entity own-storage case, no third-party mutable
   reads;
@@ -290,8 +296,8 @@ Reproduce the cap evidence: `node scripts/probe-cap.mjs --rpc <url>
 rejection. As of 2026-11-06 both public endpoints still answer
 `prefix gas budget exceeded: 617800 > 100000 (MAX_VERIFY_GAS)` and block
 `0x06` — the limit removal has not landed where it can be observed. The
-working public-mempool option today is the local ERC-8421 relay (500k +
-precompiles), which lands on the same public chain (mined `0x0ccb70cc…`,
+working public-mempool option today is the local ERC-8421 relay (~500k
+validation budget + precompiles), which lands on the same public chain (mined `0x0ccb70cc…`,
 block `0x41e`).
 
 ### CROPS assessment
