@@ -11,6 +11,7 @@ import {
 } from "react";
 import { AnonRpcWorker } from "@anon-rpc/browser-harness";
 import { config } from "./config";
+import { directFetch, setRpcFetch } from "./rpcTransport";
 
 /**
  * anon-rpc is the default RPC transport. Every read and every frame-tx
@@ -31,8 +32,6 @@ type AnonRpcState = {
 };
 
 const PASSTHROUGH = "0x4fd77be300f31c5fe6ab266d35d27750a3478d27";
-
-const directFetch: typeof fetch = (input, init) => fetch(input, init);
 
 const AnonRpcContext = createContext<AnonRpcState>({
   fetch: directFetch,
@@ -138,6 +137,15 @@ export function AnonRpcProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(() => state, [state]);
+
+  // Every module-level transport (viem publicClient, wagmi) reads through
+  // `rpcFetch`, so install the worker fetch here as soon as it is ready.
+  useEffect(() => {
+    setRpcFetch(state.fetch);
+  }, [state.fetch]);
+
+  useEffect(() => () => setRpcFetch(directFetch), []);
+
   return (
     <AnonRpcContext.Provider value={value}>
       {children}

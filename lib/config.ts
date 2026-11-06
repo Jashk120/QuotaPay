@@ -2,7 +2,9 @@ const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 export const config = {
   chainId: Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 1337),
-  rpcUrl: process.env.NEXT_PUBLIC_RPC_URL ?? "http://localhost:14337/rpc",
+  rpcUrl:
+    process.env.NEXT_PUBLIC_RPC_URL ??
+    "https://altmempool.forshtat.com/rpc",
   gatewayUrl:
     process.env.NEXT_PUBLIC_GATEWAY_URL ?? "https://altmempool.forshtat.com",
   factoryAddress: (process.env.NEXT_PUBLIC_FACTORY_ADDRESS ?? "") as

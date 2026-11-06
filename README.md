@@ -118,6 +118,24 @@ and verifies the disabled-submission guard. It runs with
   signed envelope to an EIP-8141 RPC. No external wallet can sign an EIP-8141
   frame transaction yet, so the beneficiary's wallet is generated in-browser.
 
+## RPC transport
+
+`NEXT_PUBLIC_RPC_URL` defaults to the altmempool devnet
+(`https://altmempool.forshtat.com/rpc`). The app routes every read, fee
+estimate, receipt poll and frame-tx submission through the anon-rpc worker;
+`lib/rpcTransport.ts` is the single fetch that viem and wagmi transports
+delegate to, so `publicClient` and `useWriteContract` follow the worker once it
+is ready. Without a real specifier (`NEXT_PUBLIC_ANON_RPC_SPECIFIER`) the
+default worker is a passthrough and does not anonymize.
+
+One limitation: an injected wallet broadcasts its own `eth_sendTransaction`
+through the wallet's RPC, not through the app's transport. Admin writes are
+therefore wallet-routed; only reads, estimates and receipt polling are
+anonymized. Broadcasting an admin write through anon-rpc needs a local signer
+or relayer, because the raw signed transaction must be submitted by the app.
+Deployment scripts are Node processes and use the altmempool RPC directly —
+the anon-rpc harness is browser-only.
+
 ## Ox wire compatibility
 
 `ox` follows the current EIP-8141 draft (7/8 payload items). The `ethrex`

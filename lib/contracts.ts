@@ -8,6 +8,7 @@ import {
   type Hex,
 } from "viem";
 import { config } from "./config";
+import { rpcFetch } from "./rpcTransport";
 import { companyPaymasterAbi } from "./abis";
 
 export const devnet = defineChain({
@@ -21,10 +22,9 @@ export const devnet = defineChain({
 export function makePublicClient(fetchImpl?: typeof fetch) {
   return createPublicClient({
     chain: devnet,
-    transport: http(
-      config.rpcUrl,
-      fetchImpl ? { fetchFn: fetchImpl } : undefined,
-    ),
+    transport: http(config.rpcUrl, {
+      fetchFn: fetchImpl ?? rpcFetch,
+    }),
   });
 }
 

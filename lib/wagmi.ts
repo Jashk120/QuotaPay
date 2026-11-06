@@ -6,6 +6,7 @@ import {
 import { createConfig, http } from "wagmi";
 import { devnet } from "./contracts";
 import { config } from "./config";
+import { rpcFetch } from "./rpcTransport";
 
 /**
  * WalletConnect needs a projectId from https://cloud.walletconnect.com.
@@ -32,7 +33,7 @@ const connectors = connectorsForWallets(
 export const wagmiConfig = createConfig({
   chains: [devnet],
   transports: {
-    [devnet.id]: http(config.rpcUrl),
+    [devnet.id]: http(config.rpcUrl, { fetchFn: rpcFetch }),
   },
   connectors,
   ssr: true,
