@@ -45,8 +45,9 @@ Descriptions below are paraphrased from public pages. I did not audit any code.
 
 **Where this project differs (my inference from those descriptions, not a verified claim of novelty):**
 
-- Authority is enforced by the account's own validation on EIP-8141, not by a delegation module or a hot key.
-- Authorization is tiered and checked onchain, including admin signatures for membership removal.
+- Validation is native, with no bundler or EntryPoint in the path.
+- Tiers 2 and 3 add admin signatures and member votes on top of the account policy.
+- The account checks the signature entry's resolved signer against `agentSigner` (currently pinned to scheme 1 in `AgentAccount`; scheme parameterization is future work).
 - Natural-language membership administration (add, remove, roles) is the core of the agent, not an add-on to voting or treasury advice.
 - Votes are private and gas-sponsored.
 
@@ -60,11 +61,11 @@ A critique of an existing governance agent points out that whoever builds and co
 
 The agent never holds an externally owned account with open authority. It transacts through `AgentAccount`, a contract account that is `tx.sender`.
 
-- Its VERIFY frame reads the SENDER frame's target and selector and approves execution only if they match a policy table stored in the account.
+- Its VERIFY frame reads the SENDER frame's target and selector and approves execution only if they match a policy table stored in the account. This holds when `frameEnforced` is true **and** the client admits SENDER-frame reads during validation (spec §7.3 probe must PASS on that chain). On the live devnet the probe has not passed, so deployments use `DAO_FRAME_ENFORCED=false` and enforcement currently happens at execution in `DaoCore`; see §7.3.
 - The policy table can be changed only by `DaoCore` as the result of a member vote.
 - If VERIFY reverts before payment approval, the transaction is invalid at the protocol level, never enters a block, and no gas is charged: https://ethresear.ch/t/frame-transactions-and-the-three-gates-to-privacy/24666
 
-This is the difference from session-key models: out-of-policy transactions are rejected at validation, before execution.
+This is the difference from session-key models as designed: out-of-policy transactions are rejected at validation, before execution. **Status: not yet demonstrated on the live devnet** — `frameEnforced=false` there, so `DaoCore` is the enforcing layer today (execution, not validation). Do not claim validation-enforcement until a real client rejects an out-of-policy frame tx.
 
 ### 4.2 Tiered authorization checked onchain
 
