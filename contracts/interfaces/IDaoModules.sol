@@ -8,7 +8,7 @@ interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
 }
 
-/// The subset of `AgentAccount` that `DaoCore` and `DaoFactory` mutate.
+/// The subset of `AgentAccount` that `DaoCore` mutates.
 interface IAgentAccount {
     function setRule(address target, bytes4 selector, bool allowed, uint8 tier) external;
     function setAgentSigner(address next) external;

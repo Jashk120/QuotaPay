@@ -26,7 +26,7 @@ function arg(name, fallback) {
 }
 
 const RPC = arg("rpc", "https://altmempool.forshtat.com/rpc");
-const CHAIN_ID = 1337;
+const CHAIN_ID = Number(arg("chain-id", "1337"));
 const STATE_PATH =
   process.env.WORKSHOP_STATE ??
   "C:/projects/poolframes/workshop/.workshop-state.json";
@@ -152,29 +152,60 @@ async function main() {
     response.error?.data?.data ??
     response.error?.data?.result ??
     response.error?.data;
-  if (typeof data === "string" && data.startsWith("0x")) {
-    try {
-      const decoded = decodeErrorResult({
-        abi: artifacts.FrameReadProbe.abi,
-        data,
-      });
-      console.log("\nprobe result:");
-      console.log({
-        frameCount: decoded.args[0].toString(),
-        currentFrame: decoded.args[1].toString(),
-        senderMode: decoded.args[2].toString(),
-        senderTarget: decoded.args[3],
-        senderSelector: decoded.args[4],
-        senderDataLength: decoded.args[5].toString(),
-        senderHead: decoded.args[6],
-      });
+  if (typeof data !== "string" || !data.startsWith("0x")) {
+    console.log(
+      "\nNo revert data: the client did not report a probe result. " +
+        "AgentAccount must use the spec §7.3 fallback (DAO_FRAME_ENFORCED=false).",
+    );
+    process.exitCode = 2;
+    return;
+  }
+
+  try {
+    const decoded = decodeErrorResult({
+      abi: artifacts.FrameReadProbe.abi,
+      data,
+    });
+    if (decoded.errorName !== "ProbeResult") {
       console.log(
-        "\nIf senderMode=2, senderTarget and senderSelector match, VERIFY can read SENDER frames. " +
-          "Otherwise AgentAccount must use the spec §7.3 signature-only fallback.",
+        `\nProbe frame reverted with ${decoded.errorName}, not ProbeResult: ` +
+          "the client did not allow the SENDER-frame reads. " +
+          "AgentAccount must use the spec §7.3 fallback (DAO_FRAME_ENFORCED=false).",
       );
-    } catch (error) {
-      console.log(`\ncould not decode probe result: ${error.message}`);
+      process.exitCode = 2;
+      return;
     }
+
+    const result = {
+      frameCount: decoded.args[0].toString(),
+      currentFrame: decoded.args[1].toString(),
+      senderMode: decoded.args[2].toString(),
+      senderTarget: decoded.args[3],
+      senderSelector: decoded.args[4],
+    };
+    console.log("\nprobe result:");
+    console.log(result);
+
+    const ok =
+      result.frameCount === "2" &&
+      result.currentFrame === "0" &&
+      result.senderMode === "2" &&
+      result.senderTarget.toLowerCase() === SENDER_TARGET.toLowerCase() &&
+      result.senderSelector.toLowerCase() === SENDER_DATA.slice(0, 10).toLowerCase();
+
+    console.log(
+      ok
+        ? "\nPASS: VERIFY can read the SENDER frame."
+        : "\nFAIL: the reads succeeded but returned unexpected values; " +
+            "AgentAccount must use the spec §7.3 fallback (DAO_FRAME_ENFORCED=false).",
+    );
+    process.exitCode = ok ? 0 : 2;
+  } catch (error) {
+    console.log(`\ncould not decode probe result: ${error.message}`);
+    console.log(
+      "AgentAccount must use the spec §7.3 fallback (DAO_FRAME_ENFORCED=false).",
+    );
+    process.exitCode = 2;
   }
 }
 

@@ -41,6 +41,14 @@ contract DaoFactory {
 
     mapping(bytes32 => DaoRecord) public daos;
     mapping(address => bytes32) public daoIdOf;
+    bool private _entered;
+
+    modifier nonReentrant() {
+        require(!_entered, "reentrant");
+        _entered = true;
+        _;
+        _entered = false;
+    }
 
     event DaoCreated(
         bytes32 indexed daoId,
@@ -69,7 +77,7 @@ contract DaoFactory {
         PolicyRule[] calldata rules,
         TokenCapConfig[] calldata tokenCaps,
         AssetConfig[] calldata assets
-    ) external payable returns (address daoCore, address agentAccount) {
+    ) external payable nonReentrant returns (address daoCore, address agentAccount) {
         require(cfg.daoId != bytes32(0), "daoId=0");
         require(daos[cfg.daoId].daoCore == address(0), "dao exists");
 

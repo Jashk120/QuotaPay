@@ -11,17 +11,17 @@ import {
 /// Spec §7.3 probe: can a VERIFY frame read a later SENDER frame?
 ///
 /// `scripts/frame-read-probe.mjs` runs this in a VERIFY frame against a SENDER
-/// frame with a known target and selector. The revert data reports exactly what
-/// the client returned, or the error names the first unsupported opcode.
+/// frame with a known target and selector. The probe performs exactly the reads
+/// `AgentAccount` needs, so a client that rejects them cannot be mistaken for a
+/// client that only rejects optional diagnostics. On success it reverts with
+/// `ProbeResult`; otherwise the client's own error is the result.
 contract FrameReadProbe is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     error ProbeResult(
         uint256 frameCount,
         uint256 currentFrame,
         uint256 senderMode,
         address senderTarget,
-        bytes4 senderSelector,
-        uint256 senderDataLength,
-        bytes senderHead
+        bytes4 senderSelector
     );
 
     fallback() external {
@@ -34,21 +34,13 @@ contract FrameReadProbe is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
             uint160(frameparam(senderIndex, FrameParam.RESOLVED_TARGET))
         );
         bytes4 senderSelector = bytes4(framedataload(0, senderIndex));
-        uint256 senderDataLength = frameparam(senderIndex, FrameParam.DATA_LENGTH);
-        bytes memory senderHead = framedatacopy(
-            0,
-            senderDataLength < 64 ? senderDataLength : 64,
-            senderIndex
-        );
 
         revert ProbeResult(
             frameCount,
             currentFrame,
             senderMode,
             senderTarget,
-            senderSelector,
-            senderDataLength,
-            senderHead
+            senderSelector
         );
     }
 }

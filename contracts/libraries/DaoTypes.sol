@@ -36,8 +36,8 @@ struct AssetConfig {
     uint256 cap;
 }
 
-/// Immutable DAO configuration. Mutable policy (caps, rules, admin) is changed
-/// through tier-3 proposals after deployment.
+/// Deployment-time DAO configuration. `DaoCore` stores the mutable fields and
+/// applies later changes through tier-3 proposals.
 struct DaoConfig {
     bytes32 daoId;
     address admin;
