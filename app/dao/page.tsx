@@ -503,9 +503,18 @@ function applyPlan(
       break;
     }
     case "update_policy": {
-      if (String(plan.params.change || "").includes("2500")) {
+      const change = String(plan.params.change || "");
+      if (change.includes("2500")) {
         draft.config.perPeriodCap = 2500;
       }
+      const assetId = String(plan.params.assetId || "");
+      const asset = draft.assets.find(
+        (row) =>
+          row.id === assetId ||
+          (change.toLowerCase().includes(row.name.toLowerCase()) &&
+            /allowlist/i.test(change)),
+      );
+      if (asset && /allowlist/i.test(change)) asset.allowlisted = true;
       break;
     }
     default:
