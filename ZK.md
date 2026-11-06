@@ -47,7 +47,7 @@ so without it a proof could be replayed under a different `tx.sender`.
 | `scripts/zk-publish.mjs` | Copy wasm/zkey to `public/zk`, write the demo credential |
 | `scripts/zk-admin.mjs` | Add/remove leaf commitments, emit paths, update root/epoch |
 | `lib/zk/client.ts` | Browser witness/nullifier/prover helpers (`poseidon-lite` + `snarkjs`) |
-| `app/zk/page.tsx` | Parallel `/zk` payment page (blind-token `/pay` untouched) |
+| `app/pay/page.tsx` | `/pay` page with the ZK panel (blind-token path still available) |
 | `components/zk-credential-form.tsx` | Paste/load credential JSON, show bound nullifiers |
 | `components/zk-payment-panel.tsx` | Prove → build → sign → submit, with live root/epoch checks |
 | `test/t12-zk-verifier.test.mjs` | Fixture proof verifies; tampering fails; gas guard |
@@ -60,7 +60,7 @@ The old `1_000_000` was a placeholder. The measured numbers on this tree:
 
 | Measurement | Gas |
 |---|---|
-| `verifyProof` estimate (7 public inputs) | **258,738** |
+| `verifyProof` estimate (7 public inputs) | **258,663** |
 | `verifyProof` actual `gasUsed` (ganache) | **255,928** |
 | Groth16 pairing component (4 pairs, EIP-1108) | 181,000 |
 | Public-input MSM (7 × `ecMul` + `ecAdd`) | ~43,000 |
@@ -121,10 +121,10 @@ Reproduce:
 ```powershell
 npm run zk:proof     # generate build/zk/proof.json + public.json
 npm run zk:bench     # deploy verifier on ganache, print estimate/gasUsed
-npm test             # T12 asserts the fixture verifies and gas < 305k
+npm test             # T12 asserts the fixture verifies and gas < 315k
 ```
 
-## Browser flow (`/zk`)
+## Browser flow (`/pay`)
 
 ```powershell
 npm run zk:setup      # circuit + devnet zkey + verifier
@@ -133,10 +133,10 @@ npm run zk:publish    # wasm/zkey -> public/zk + demo credential
 npm run dev
 ```
 
-Open `/zk`. The page:
+Open `/pay`. The page:
 
 1. shows the session key that will be bound into the proof;
-2. loads a credential JSON (or the gitignored demo credential) into
+2. loads a credential JSON (or the committed demo credential) into
    localStorage;
 3. computes `identityNullifier` / `sessionNullifier` with `poseidon-lite` in
    the tab;
@@ -146,9 +146,10 @@ Open `/zk`. The page:
    4-frame tx with a 330k charge-frame budget, signs with the session key, and
    submits.
 
-`public/zk/` is gitignored: it contains a 2.2 MB wasm, a 5.4 MB zkey, and the
-demo secret. A fresh clone must run `zk:setup` + `zk:publish` before `/zk` can
-prove. The CLI equivalent is `npm run zk:sponsor`.
+`public/zk/` is tracked: it contains a 2.2 MB wasm, a 5.4 MB zkey, a
+verification key, and the demo credential. Regenerate it with `zk:setup` +
+`zk:publish` after changing the circuit or key. The CLI equivalent is
+`npm run zk:sponsor`.
 
 Browser check: `npx playwright test e2e/zk.spec.ts` loads the fixture
 credential, generates the proof in Chromium, and builds the 4-frame tx. It
@@ -194,7 +195,7 @@ npm run zk:admin -- stake 0.012 86400
 ```
 
 Send that path to the employee; they add only their own `secret` and paste the
-result into the `/zk` credential form. Removal sets the slot to `0` instead of splicing, so
+result into the `/pay` credential form. Removal sets the slot to `0` instead of splicing, so
 other employees' indices and paths stay stable until the next root update.
 Changing the root invalidates every outstanding path; redistribute after each
 `add`/`remove`.
@@ -346,9 +347,8 @@ grant cross-instance access.
 
 ## Limitations / next steps
 
-- The parallel `/zk` page is wired (browser prover + submit). `/pay` still uses
-  the blind-token `charge(Token)` path until the ZK flow is validated on the
-  devnet. The CLI path is `npm run zk:deploy` then `npm run zk:sponsor`.
+- The `/pay` page carries the browser prover + submit panel alongside the
+  blind-token path. The CLI path is `npm run zk:deploy` then `npm run zk:sponsor`.
 - One payment per epoch. Multiple payments need a sequential counter or a
   different credential design.
 - `TXPARAM.MAX_COST` is an ethrex extension (`0x06`). On a chain without it,
