@@ -88,7 +88,7 @@ test("T18 DaoFactory: deploy, wire and isolate DAOs", async (t) => {
     assert.equal(created.admin, adminAddr);
     assert.equal(created.funding, ethers.parseEther("2"));
     assert.equal((await factory.daoIdOf(coreAddr)).toLowerCase(), daoId.toLowerCase());
-    assert.equal((await factory.daos(daoId)).daoCore, coreAddr);
+    assert.equal((await factory.daoOf(adminAddr, daoId)).daoCore, coreAddr);
 
     assert.equal(await core.admin(), adminAddr);
     assert.equal(await core.agentAccount(), accountAddr);
@@ -174,6 +174,28 @@ test("T18 DaoFactory: deploy, wire and isolate DAOs", async (t) => {
     await expectRevert(
       () => factory.createDao.staticCall(cfg({ daoId: id(0) }), [], [], []),
       "daoId=0"
+    );
+  });
+
+  await t.test("different admins can reuse the same dao id", async () => {
+    const tx = await factory.createDao(
+      cfg({ daoId, admin: bobAddr }),
+      [],
+      [],
+      []
+    );
+    const created = parseEvent(factory, await tx.wait(), "DaoCreated");
+    assert.equal(created.daoId, daoId);
+    assert.equal(created.admin, bobAddr);
+    assert.equal(
+      (await factory.daoOf(bobAddr, daoId)).daoCore,
+      created.daoCore,
+      "bob's DAO is namespaced under bob"
+    );
+    assert.notEqual(
+      (await factory.daoOf(adminAddr, daoId)).daoCore,
+      created.daoCore,
+      "admin's DAO with the same id is untouched"
     );
   });
 

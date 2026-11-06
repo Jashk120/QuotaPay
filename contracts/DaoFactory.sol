@@ -47,6 +47,11 @@ contract DaoFactory {
     /// swap module and `DaoCore.swapAboveCap` stays closed.
     address public immutable swapModuleFactory;
 
+    /// @dev Namespace DAO ids by admin, so two different admins can both have
+    ///      a DAO called "my-dao" without colliding.
+    mapping(address => mapping(bytes32 => DaoRecord)) private _daosByAdmin;
+    /// Legacy/global lookup of the most recently created DAO for an id.
+    /// Prefer `daoOf(admin, daoId)`.
     mapping(bytes32 => DaoRecord) public daos;
     mapping(address => bytes32) public daoIdOf;
     bool private _entered;
@@ -89,10 +94,14 @@ contract DaoFactory {
         AssetConfig[] calldata assets
     ) external payable nonReentrant returns (address daoCore, address agentAccount) {
         require(cfg.daoId != bytes32(0), "daoId=0");
-        require(daos[cfg.daoId].daoCore == address(0), "dao exists");
+        require(
+            _daosByAdmin[cfg.admin][cfg.daoId].daoCore == address(0),
+            "dao exists"
+        );
 
         DaoRecord memory record = _deploy(cfg, rules, tokenCaps, assets);
 
+        _daosByAdmin[cfg.admin][cfg.daoId] = record;
         daos[cfg.daoId] = record;
         daoIdOf[record.daoCore] = cfg.daoId;
 
@@ -105,6 +114,15 @@ contract DaoFactory {
             msg.value
         );
         return (record.daoCore, record.agentAccount);
+    }
+
+    /// The DAO an admin created under a given id. Names are unique per admin.
+    function daoOf(address admin, bytes32 daoId)
+        external
+        view
+        returns (DaoRecord memory)
+    {
+        return _daosByAdmin[admin][daoId];
     }
 
     function _deploy(

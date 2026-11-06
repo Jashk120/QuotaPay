@@ -16,8 +16,14 @@ import {
   type OnchainDao,
 } from "@/lib/dao/factory";
 import { readChainSummary, type ChainDaoSummary } from "@/lib/dao/chain";
+import { useConnectedWallet } from "@/lib/wallet";
+import { cn } from "@/lib/utils";
+
+type Tab = "mine" | "all";
 
 export default function DaosPage() {
+  const { address, connect } = useConnectedWallet();
+  const [tab, setTab] = useState<Tab>("mine");
   const [daos, setDaos] = useState<OnchainDao[] | null>(null);
   const [summaries, setSummaries] = useState<Record<string, ChainDaoSummary>>(
     {},
@@ -84,20 +90,47 @@ export default function DaosPage() {
     };
   }, [daos]);
 
+  const adminOf = (entry: OnchainDao) =>
+    (summaries[entry.address]?.admin ?? entry.admin).toLowerCase();
+  const myDaos = (daos ?? []).filter(
+    (entry) => Boolean(address) && adminOf(entry) === address!.toLowerCase(),
+  );
+  const visible = tab === "mine" ? myDaos : (daos ?? []);
+
   return (
     <div className="mx-auto max-w-4xl space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-2">
           <Badge variant="outline">Workspace</Badge>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            DAOs
+            {tab === "mine" ? "Your DAOs" : "All DAOs"}
           </h1>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            A wallet can run any number of DAOs. This list defaults to the ones
+            your connected wallet administers.
+          </p>
         </div>
         <Button asChild size="lg">
           <Link href="/new">
             <Plus className="h-4 w-4" /> Create DAO
           </Link>
         </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-1 rounded-lg border border-border/60 bg-secondary/30 p-1">
+          <TabButton active={tab === "mine"} onClick={() => setTab("mine")}>
+            My DAOs{address ? ` (${myDaos.length})` : ""}
+          </TabButton>
+          <TabButton active={tab === "all"} onClick={() => setTab("all")}>
+            All DAOs ({daos?.length ?? 0})
+          </TabButton>
+        </div>
+        {!address ? (
+          <Button size="sm" variant="outline" onClick={connect}>
+            Connect wallet
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -108,29 +141,35 @@ export default function DaosPage() {
         </Card>
       ) : null}
 
-      {daos === null ? (
+      {tab === "mine" && !address ? (
+        <EmptyState
+          title="Connect to see your DAOs"
+          body="Your wallet is the DAO admin. Connect it to list the DAOs you can operate, or browse everything on the devnet."
+          onConnect={connect}
+          onBrowseAll={() => setTab("all")}
+        />
+      ) : daos === null ? (
         <Card>
           <CardContent className="flex items-center justify-center gap-2 p-10 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </CardContent>
         </Card>
       ) : daos.length === 0 ? (
-        <Card>
-          <CardContent className="space-y-4 p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              No DAO is registered on this factory yet. Create one to get
-              started.
-            </p>
-            <Button asChild>
-              <Link href="/new">
-                <Plus className="h-4 w-4" /> Create DAO
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <EmptyState
+          title="No DAOs yet"
+          body="No DAO is registered on this factory yet. Create one to get started."
+          showCreate
+        />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          title="No DAOs for this wallet"
+          body="This wallet does not administer any DAO on this factory yet."
+          showCreate
+          onBrowseAll={() => setTab("all")}
+        />
       ) : (
         <div className="grid gap-5 md:grid-cols-2">
-          {daos.map((entry) => (
+          {visible.map((entry) => (
             <DaoCard
               key={entry.id}
               entry={entry}
@@ -141,6 +180,74 @@ export default function DaosPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+        active
+          ? "bg-white text-foreground shadow-sm ring-1 ring-border/60"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({
+  title,
+  body,
+  showCreate,
+  onConnect,
+  onBrowseAll,
+}: {
+  title: string;
+  body: string;
+  showCreate?: boolean;
+  onConnect?: () => void;
+  onBrowseAll?: () => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
+        <div className="space-y-1">
+          <h2 className="text-sm font-medium">{title}</h2>
+          <p className="max-w-md text-sm text-muted-foreground">{body}</p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          {onConnect ? (
+            <Button onClick={onConnect}>Connect wallet</Button>
+          ) : null}
+          {showCreate ? (
+            <Button asChild>
+              <Link href="/new">
+                <Plus className="h-4 w-4" /> Create DAO
+              </Link>
+            </Button>
+          ) : null}
+          {onBrowseAll ? (
+            <Button variant="outline" onClick={onBrowseAll}>
+              Browse all DAOs
+            </Button>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
