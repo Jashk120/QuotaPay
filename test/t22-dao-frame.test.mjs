@@ -12,6 +12,7 @@ import {
   encodeDaoVoteCharge,
   serializeFrameTx,
   signFrameTx,
+  toSolidityProof,
 } from "../lib/daoFrameTx.mjs";
 
 const KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
@@ -68,13 +69,16 @@ test("T22 DAO frame layouts", async (t) => {
   });
 
   await t.test("private vote: fresh sender -> proof charge -> castVote", () => {
+    // snarkjs `proof.json` form. The encoder must reverse each G2 limb pair
+    // for the Solidity verifier.
     const proof = {
-      a: ["1", "2"],
-      b: [
+      pi_a: ["1", "2", "1"],
+      pi_b: [
         ["3", "4"],
         ["5", "6"],
+        ["1", "0"],
       ],
-      c: ["7", "8"],
+      pi_c: ["7", "8", "1"],
     };
     const chargeData = encodeDaoVoteCharge({
       proof,
@@ -112,6 +116,15 @@ test("T22 DAO frame layouts", async (t) => {
       data: chargeData,
     });
     assert.equal(charge.functionName, "charge");
+    assert.deepEqual(charge.args[0].map(String), ["1", "2"]);
+    assert.deepEqual(
+      charge.args[1].map((row) => row.map(String)),
+      [
+        ["4", "3"],
+        ["6", "5"],
+      ],
+    );
+    assert.deepEqual(charge.args[2].map(String), ["7", "8"]);
     assert.equal(charge.args[3], 7n);
     assert.equal(charge.args[4], 42n);
     assert.equal(charge.args[5], 43n);
@@ -126,6 +139,18 @@ test("T22 DAO frame layouts", async (t) => {
     const signed = signFrameTx(tx, KEY);
     assert.equal(signed.signatures[0].signature.length, 132);
     assert.ok(serializeFrameTx(signed).startsWith("0x06"));
+  });
+
+  await t.test("a proof already in Solidity order passes through", () => {
+    const proof = {
+      a: ["1", "2"],
+      b: [
+        ["3", "4"],
+        ["5", "6"],
+      ],
+      c: ["7", "8"],
+    };
+    assert.deepEqual(toSolidityProof(proof), proof);
   });
 
   await t.test("agent action requires at least one call", () => {
