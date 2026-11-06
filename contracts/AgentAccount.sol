@@ -60,8 +60,8 @@ contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         _;
     }
 
-    modifier onlyAdmin() {
-        require(msg.sender == admin, "not admin");
+    modifier onlyAdminOrDao() {
+        require(msg.sender == admin || msg.sender == dao, "not admin or dao");
         _;
     }
 
@@ -127,8 +127,9 @@ contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         emit FrameEnforcedSet(enforced);
     }
 
-    /// Emergency pause. The admin calls this directly, without the agent.
-    function pause(bool paused_) external onlyAdmin {
+    /// Emergency pause. The admin calls this directly, without the agent; the
+    /// DAO can also pause through `DaoCore.pauseAgent` as a second valve.
+    function pause(bool paused_) external onlyAdminOrDao {
         paused = paused_;
         emit PausedSet(paused_);
     }
