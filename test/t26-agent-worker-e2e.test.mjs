@@ -40,6 +40,9 @@ if (!process.env.DATABASE_URL) {
 }
 
 const HAS_DB = Boolean(process.env.DATABASE_URL);
+if (!HAS_DB) {
+  throw new Error("DATABASE_URL is required (root .env or env) — refusing to silently skip remote worker tests");
+}
 let sql = null;
 if (HAS_DB) {
   ({ neon: sql } = await import("@neondatabase/serverless").then((m) => ({
@@ -133,7 +136,7 @@ async function cleanup(id) {
   await sql`delete from agent_intents where id = ${id}`;
 }
 
-test("T26 agent worker e2e", { skip: !HAS_DB && "needs DATABASE_URL" }, async (t) => {
+test("T26 agent worker e2e", async (t) => {
   await t.test("1. fresh DAO bootstraps through the remote worker", async () => {
     const id = await enqueue("Pay October contributors 150", freshState());
     try {
