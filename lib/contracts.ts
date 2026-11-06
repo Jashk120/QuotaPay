@@ -8,7 +8,7 @@ import {
   type Hex,
 } from "viem";
 import { config } from "./config";
-import { rpcFetch } from "./rpcTransport";
+import { directFetch, rpcFetch } from "./rpcTransport";
 import { companyPaymasterAbi } from "./abis";
 
 export const devnet = defineChain({
@@ -22,17 +22,24 @@ export const devnet = defineChain({
   testnet: true,
 });
 
-/** Build a read client, optionally routed through anon-rpc's fetch. */
+/**
+ * Build a read client. The DAO sidecar is a direct devnet endpoint, so reads
+ * default to a direct fetch: the anon-rpc passthrough worker does not anonymize
+ * and was returning empty `eth_getLogs` results for chain 1337. Callers that
+ * want the worker can pass `rpcFetch`.
+ */
 export function makePublicClient(fetchImpl?: typeof fetch) {
   return createPublicClient({
     chain: devnet,
     transport: http(config.rpcUrl, {
-      fetchFn: fetchImpl ?? rpcFetch,
+      fetchFn: fetchImpl ?? directFetch,
     }),
   });
 }
 
 export const publicClient = makePublicClient();
+/** Explicit anon-rpc read client for the sponsorship demo. */
+export const rpcPublicClient = makePublicClient(rpcFetch);
 
 export function bytes32FromLabel(label: string): Hex {
   return keccak256(stringToHex(label.trim()));

@@ -31,7 +31,11 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { config } from "@/lib/config";
 import { publicClient } from "@/lib/contracts";
-import { daoFactoryAbi, sharedDaoGasPaymasterAbi } from "@/lib/daoAbis.mjs";
+import {
+  daoFactoryAbi,
+  mockUsdcAbi,
+  sharedDaoGasPaymasterAbi,
+} from "@/lib/daoAbis.mjs";
 import { daoIdFromName } from "@/lib/dao/factory";
 import { useConnectedWallet } from "@/lib/wallet";
 
@@ -57,6 +61,9 @@ export default function NewDaoPage() {
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
+  const [fundedTreasury, setFundedTreasury] = useState<string | null>(null);
+  const [fundingNote, setFundingNote] = useState<string | null>(null);
+  const [fundAfterDeploy, setFundAfterDeploy] = useState(true);
 
   const factory = config.daoFactoryAddress;
 
@@ -107,6 +114,8 @@ export default function NewDaoPage() {
   async function deploy() {
     setError(null);
     setCreated(null);
+    setFundedTreasury(null);
+    setFundingNote(null);
     if (!factory) {
       setError("NEXT_PUBLIC_DAO_FACTORY is not configured.");
       return;
@@ -189,7 +198,61 @@ export default function NewDaoPage() {
           console.warn("allowAgent failed", cause);
         }
       }
-      router.push(`/dao/${createdEvent.daoCore}/chat`);
+
+      // Fund the treasury. The devnet USDC is a MockERC20 with a permissionless
+      // mint; on a real token we transfer from the admin wallet instead.
+      const treasuryAmount =
+        config.usdcAddress && isAddressLike(config.usdcAddress)
+          ? parseUnits(treasury || "0", config.usdcDecimals)
+          : 0n;
+      let funded = true;
+      if (
+        fundAfterDeploy &&
+        treasuryAmount > 0n &&
+        config.usdcAddress &&
+        isAddressLike(config.usdcAddress)
+      ) {
+        const token = config.usdcAddress;
+        try {
+          const walletBalance = await publicClient.readContract({
+            address: token,
+            abi: mockUsdcAbi,
+            functionName: "balanceOf",
+            args: [address],
+          });
+          const fromWallet = walletBalance >= treasuryAmount;
+          const fundHash = fromWallet
+            ? await writeContractAsync({
+                address: token,
+                abi: mockUsdcAbi,
+                functionName: "transfer",
+                args: [createdEvent.daoCore, treasuryAmount],
+              })
+            : await writeContractAsync({
+                address: token,
+                abi: mockUsdcAbi,
+                functionName: "mint",
+                args: [createdEvent.daoCore, treasuryAmount],
+              });
+          await publicClient.waitForTransactionReceipt({ hash: fundHash });
+          setFundedTreasury(
+            fromWallet
+              ? `${treasury} USDC from your wallet`
+              : `${treasury} test USDC (devnet faucet)`,
+          );
+        } catch (cause) {
+          funded = false;
+          setFundingNote(
+            `Treasury was not funded: ${
+              cause instanceof Error ? cause.message : String(cause)
+            }. Transfer USDC to ${createdEvent.daoCore}.`,
+          );
+        }
+      }
+
+      if (funded) {
+        router.push(`/dao/${createdEvent.daoCore}/chat`);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -288,7 +351,7 @@ export default function NewDaoPage() {
                 onChange={(event) => setName(event.target.value)}
               />
             </Field>
-            <Field label="Treasury (USDC)" htmlFor="dao-treasury">
+            <Field label="Treasury target (USDC)" htmlFor="dao-treasury">
               <Input
                 id="dao-treasury"
                 value={treasury}
@@ -334,9 +397,24 @@ export default function NewDaoPage() {
 
           <p className="text-[11px] text-muted-foreground">
             Native funding is sent with{" "}
-            <span className="font-mono">createDao</span>. The USDC treasury is
-            funded afterwards by transferring USDC to the new DaoCore address.
+            <span className="font-mono">createDao</span>. A DAO starts with 0
+            USDC; the target is funded after deploy. The devnet mock is minted
+            as test USDC; a real token is transferred from your wallet if it
+            holds enough.
           </p>
+
+          <label className="flex items-start gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={fundAfterDeploy}
+              onChange={(event) => setFundAfterDeploy(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              Fund the treasury after deploy (devnet faucet mints test USDC; not
+              real value).
+            </span>
+          </label>
 
           <div className="grid gap-2 rounded-xl border border-border/70 bg-white/60 p-3 text-sm">
             <Row label="Factory" value={factory || "not configured"} mono />
@@ -369,15 +447,31 @@ export default function NewDaoPage() {
                 <div>
                   DaoCore: <span className="font-mono">{created}</span>
                 </div>
+                {fundedTreasury ? (
+                  <div className="text-xs">
+                    Treasury funded with {fundedTreasury}.
+                  </div>
+                ) : null}
+                {fundingNote ? (
+                  <div className="text-xs text-destructive">{fundingNote}</div>
+                ) : null}
+                {!fundAfterDeploy ? (
+                  <div className="text-xs">
+                    Treasury is unfunded. Use the Treasury panel to mint test
+                    USDC, deposit USDC, or swap ETH.
+                  </div>
+                ) : null}
                 <div className="text-xs">
-                  Opening your console…{" "}
+                  {fundingNote
+                    ? "The treasury was not funded, so the console was not opened automatically. "
+                    : "Opening your console… "}
                   <Link
                     href={`/dao/${created}/chat`}
                     className="font-medium underline underline-offset-2"
                   >
                     open it now
                   </Link>{" "}
-                  if nothing happens.
+                  {fundingNote ? "" : "if nothing happens."}
                 </div>
               </div>
             </Alert>

@@ -61,6 +61,16 @@ export const config = {
     | `0x${string}`
     | "",
   usdcDecimals: Number(process.env.NEXT_PUBLIC_USDC_DECIMALS ?? 6),
+  /** Optional v4 helper that swaps ETH -> USDC and sends the output to the DAO. */
+  treasuryFundHelper: (process.env.NEXT_PUBLIC_TREASURY_FUND_HELPER ?? "") as
+    | `0x${string}`
+    | "",
+  usdcPoolFee: Number(process.env.NEXT_PUBLIC_USDC_POOL_FEE ?? 3000),
+  usdcPoolTickSpacing: Number(
+    process.env.NEXT_PUBLIC_USDC_POOL_TICK_SPACING ?? 60,
+  ),
+  usdcPoolHooks: (process.env.NEXT_PUBLIC_USDC_POOL_HOOKS ??
+    "0x0000000000000000000000000000000000000000") as `0x${string}`,
   daoRefreshMs: Number(process.env.NEXT_PUBLIC_DAO_REFRESH_MS ?? 15000),
 };
 

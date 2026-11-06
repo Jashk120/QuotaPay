@@ -1053,7 +1053,7 @@ export default function DaoConsolePage() {
             onAddMember={addMemberFromInvite}
           />
         ) : tab === "treasury" ? (
-          <TreasuryPanel state={state} />
+          <TreasuryPanel state={state} onFunded={() => void refresh()} />
         ) : tab === "proposals" ? (
           <ProposalsPanel
             state={state}

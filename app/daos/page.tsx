@@ -266,7 +266,9 @@ function DaoCard({
     daoNameFromId(entry.daoId) ||
     `DAO ${entry.address.slice(0, 6)}…${entry.address.slice(-4)}`;
   const balance = summary
-    ? money(Number(formatUnits(summary.balance, summary.decimals)))
+    ? summary.balance === 0n
+      ? "unfunded"
+      : money(Number(formatUnits(summary.balance, summary.decimals)))
     : "—";
 
   return (

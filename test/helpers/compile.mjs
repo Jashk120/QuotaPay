@@ -30,6 +30,7 @@ const LOCAL_SOURCES = {
   "AssetModule.sol": "contracts/AssetModule.sol",
   "DaoCore.sol": "contracts/DaoCore.sol",
   "DaoSwapModule.sol": "contracts/DaoSwapModule.sol",
+  "TreasuryFundHelper.sol": "contracts/TreasuryFundHelper.sol",
   "DaoFactory.sol": "contracts/DaoFactory.sol",
   "factories/DaoCoreFactory.sol": "contracts/factories/DaoCoreFactory.sol",
   "factories/AgentAccountFactory.sol": "contracts/factories/AgentAccountFactory.sol",

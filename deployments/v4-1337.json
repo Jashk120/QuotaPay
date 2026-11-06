@@ -85,5 +85,20 @@
       "3000"
     ],
     "liquidityAfter": "1000000000000000000000"
-  }
+  },
+  "usdcPool": {
+    "key": {
+      "currency0": "0x0000000000000000000000000000000000000000",
+      "currency1": "0x2cd5ee71e7bc0067c9f78c7800f4a04a17d23dcd",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "hooks": "0x0000000000000000000000000000000000000000"
+    },
+    "poolId": "0x19d819a72ef976c8250a6fc9354be164d60bb0dc41c1fef4f94e400903c60fde",
+    "sqrtPriceX96": "5602277097478613991873193822745",
+    "tick": "85176",
+    "liquidity": "60000000000000000000",
+    "priceUsdcPerEth": "5000"
+  },
+  "treasuryFundHelper": "0x6c06ce99fb132d9ce9011f7e3e957cf1f1107ad2"
 }
