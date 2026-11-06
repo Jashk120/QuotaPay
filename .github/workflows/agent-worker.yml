@@ -47,4 +47,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - run: echo "deploy is manual: pull ghcr.io/jashk120/quotapay-agent-worker:latest on oracle-vps"
+      - name: Manual deploy note
+        run: |
+          echo "deploy is manual: pull ghcr.io/jashk120/quotapay-agent-worker:latest on oracle-vps"
