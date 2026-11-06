@@ -126,7 +126,10 @@ export async function POST(request: Request) {
         return bad("missing execute authorization", 401);
       }
       if (address.toLowerCase() !== admin.toLowerCase()) {
-        return bad("execute authorization is not from the DAO admin", 403);
+        return bad(
+          `execute authorization is not from the DAO admin (${admin})`,
+          403,
+        );
       }
       const ts = Number(nonce);
       if (

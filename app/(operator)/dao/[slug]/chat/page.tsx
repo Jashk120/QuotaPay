@@ -250,6 +250,16 @@ export default function DaoConsolePage() {
   }
 
   async function requestSignature(plan: Plan, call?: PreparedCall) {
+    if (
+      walletAddress &&
+      state.config.adminAddress &&
+      walletAddress.toLowerCase() !== state.config.adminAddress.toLowerCase()
+    ) {
+      setChainMessage(
+        `This action needs the DAO admin wallet ${shortHash(state.config.adminAddress, 8, 6)}. You are connected as ${shortHash(walletAddress, 8, 6)}.`,
+      );
+      return;
+    }
     if (!(await ensureChain())) return;
     let prepared = call ?? null;
     if (!prepared && isDaoChainConfigured) {
@@ -300,6 +310,16 @@ export default function DaoConsolePage() {
 
   /** Submit the prepared DaoCore call through the agent (server-side key). */
   async function submitCall(plan: Plan, call: PreparedCall, auth?: AdminAuth) {
+    if (
+      walletAddress &&
+      state.config.adminAddress &&
+      walletAddress.toLowerCase() !== state.config.adminAddress.toLowerCase()
+    ) {
+      setChainMessage(
+        `This action needs the DAO admin wallet ${shortHash(state.config.adminAddress, 8, 6)}. You are connected as ${shortHash(walletAddress, 8, 6)}.`,
+      );
+      return;
+    }
     if (!(await ensureChain())) return;
     setBusyPlanId(plan.id);
     setChainMessage(null);
@@ -442,6 +462,25 @@ export default function DaoConsolePage() {
               <Badge variant="outline">connecting…</Badge>
             )}
             <Badge variant="success">cloud worker</Badge>
+            {state.config.adminAddress ? (
+              <Badge
+                variant="outline"
+                title={`DAO admin: ${state.config.adminAddress}`}
+              >
+                admin {shortHash(state.config.adminAddress, 6, 4)}
+              </Badge>
+            ) : null}
+            {walletAddress &&
+            state.config.adminAddress &&
+            walletAddress.toLowerCase() !==
+              state.config.adminAddress.toLowerCase() ? (
+              <Badge
+                variant="warning"
+                title="Only the DAO admin can authorize executions from this console"
+              >
+                wallet is not admin
+              </Badge>
+            ) : null}
             <Badge variant="outline" title="Intent parser in use">
               {llmSource?.startsWith("llm:") ? llmSource : "parser: local"}
             </Badge>
