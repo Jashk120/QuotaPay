@@ -11,8 +11,9 @@ next-env.d.ts
 # generated solidity artifacts
 build/
 
-# browser prover assets + demo credential (run npm run zk:publish)
-public/zk/
+# browser prover assets + demo credential — committed so the /pay ZK flow
+# works on Vercel out of the box (run `npm run zk:publish` to refresh them).
+# NOTE: demo-credential.json holds a throwaway devnet secret, not a real key.
 
 # tool caches
 *.tsbuildinfo
