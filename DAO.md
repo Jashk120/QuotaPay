@@ -12,6 +12,7 @@ separately.
 | Members, roles, proposals, caps, audit | `contracts/DaoCore.sol` |
 | One-transaction DAO creation | `contracts/DaoFactory.sol` + `contracts/factories/*` |
 | Mock RWA/NFT custody and marketplace | `contracts/AssetModule.sol` |
+| Agent-action gas sponsorship | `contracts/DaoGasPaymaster.sol` |
 | Private votes, scope = proposal | `circuits/DaoVote.circom`, `contracts/DaoVotePaymaster.sol` |
 | Generated Groth16 verifier | `contracts/zk/DaoVoteVerifier.sol` |
 | §7.3 frame-introspection probe | `contracts/probe/FrameReadProbe.sol` |
@@ -65,6 +66,19 @@ Action {
 | Dispose asset | 4 | `keccak256(abi.encode(assetId, amount, to))` |
 
 The nonce is consumed on use and the expiry is checked before the signature.
+
+## Gas
+
+Two paymasters, two jobs:
+
+| Path | Paymaster | Gate |
+|---|---|---|
+| Agent action (tier 1/2) | `DaoGasPaymaster.charge()` | `tx.sender == DaoCore.agentAccount()`, `maxCost <= maxSponsorCost`, solvent |
+| Private vote | `DaoVotePaymaster.charge(proof, ...)` | Groth16 proof against the proposal snapshot, fresh nullifier, cost/solvency |
+
+Both approve `PAYMENT` only after their charge frame succeeds. The agent's
+`AgentAccount` still approves `EXECUTION` separately, so a sponsor bug cannot
+skip the target/selector policy.
 
 ## Membership root
 
@@ -141,6 +155,10 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
 - The vote path needs the 500k staked validation budget (the Groth16 verifier is
   ~258k gas). The agent action path fits the public 100k budget.
 - The Poseidon root is agent-supplied (see "Membership root").
+- `promptHash`/`planHash` are recorded on spends, proposals and their execution.
+  Membership and asset actions carry zero hashes; the off-chain feed can label
+  them from the plan store, but the on-chain event is not complete for those
+  actions yet.
 - `frameEnforced` defaults to the deployment config. If the §7.3 probe shows
   that chain 1337 cannot read SENDER frames during VERIFY, deploy with
   `DAO_FRAME_ENFORCED=false`; `DaoCore` remains the enforcement point.
