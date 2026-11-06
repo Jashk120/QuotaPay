@@ -33,7 +33,7 @@ import {
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { companyPaymasterAbi } from "@/lib/abis";
-import { config, isLiveConfigured } from "@/lib/config";
+import { config, demoDefaults, isLiveConfigured } from "@/lib/config";
 import {
   bytes32FromLabel,
   readPaymaster,
@@ -44,11 +44,14 @@ import {
   getActivePaymaster,
   getCompany,
   listBeneficiaries,
+  listRegistrationRequests,
+  removeRegistrationRequest,
   saveBeneficiary,
   setActiveCompany,
   setActivePaymaster,
   setBeneficiaryActive,
   type DemoBeneficiary,
+  type RegistrationRequest,
 } from "@/lib/demo-store";
 import { useConnectedWallet } from "@/lib/wallet";
 import { useAnonRpc } from "@/lib/anonRpc";
@@ -66,6 +69,7 @@ export default function AdminPage() {
   const [companyId, setCompanyId] = useState("");
   const [snapshot, setSnapshot] = useState<PaymasterSnapshot | null>(null);
   const [beneficiaries, setBeneficiaries] = useState<DemoBeneficiary[]>([]);
+  const [registrations, setRegistrations] = useState<RegistrationRequest[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +100,7 @@ export default function AdminPage() {
       setCompanyId(cid);
       setBeneficiaries(listBeneficiaries(cid));
     }
+    setRegistrations(listRegistrationRequests());
     if (live) {
       try {
         const snap = await readPaymaster(paymaster as Address, anonFetch);
@@ -248,6 +253,57 @@ export default function AdminPage() {
     setBeneficiaries(listBeneficiaries(row.companyId));
   }
 
+  async function approveRegistration(req: RegistrationRequest) {
+    if (!companyId) {
+      setError("Register or select a company first.");
+      return;
+    }
+    const id = bytes32FromLabel(req.beneficiaryId);
+    const groupId = bytes32FromLabel(req.groupId);
+    const periodLength = demoDefaults.beneficiaryPeriodLength;
+    const limit = demoDefaults.perPeriodLimit;
+
+    if (live) {
+      const ok = await write("Approve registration", () =>
+        writeContract({
+          address: paymaster as Address,
+          abi: companyPaymasterAbi,
+          functionName: "enroll",
+          args: [id, req.wallet, 0n, periodLength, limit, groupId],
+        }),
+      );
+      if (!ok) return;
+    }
+
+    saveBeneficiary({
+      companyId,
+      beneficiaryId: req.beneficiaryId,
+      beneficiaryIdBytes32: id,
+      wallet: req.wallet,
+      label: req.beneficiaryId,
+      perPeriodLimit: limit.toString(),
+      spent: "0",
+      active: true,
+      expiry: 0,
+      periodLength,
+      groupId: req.groupId,
+      createdAt: Date.now(),
+    });
+    removeRegistrationRequest(req.id);
+    setRegistrations(listRegistrationRequests());
+    setBeneficiaries(listBeneficiaries(companyId));
+    if (!live) {
+      setNotice(
+        `Approved ${req.beneficiaryId}. They can now load a credential and pay.`,
+      );
+    }
+  }
+
+  function dismissRegistration(req: RegistrationRequest) {
+    removeRegistrationRequest(req.id);
+    setRegistrations(listRegistrationRequests());
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -370,6 +426,70 @@ export default function AdminPage() {
           hint="reserved"
         />
       </div>
+
+      {registrations.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" /> Registration requests
+            </CardTitle>
+            <CardDescription>
+              Beneficiaries who registered themselves and are waiting for your
+              approval.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="pb-2 pr-4">Beneficiary</th>
+                    <th className="pb-2 pr-4">Wallet</th>
+                    <th className="pb-2 pr-4">Group</th>
+                    <th className="pb-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {registrations.map((req) => (
+                    <tr
+                      key={req.id}
+                      className="border-b border-border/40 last:border-0"
+                      data-testid="registration-row"
+                    >
+                      <td className="py-3 pr-4 font-medium">{req.beneficiaryId}</td>
+                      <td className="py-3 pr-4 font-mono text-xs" title={req.wallet}>
+                        {req.wallet.slice(0, 8)}…{req.wallet.slice(-6)}
+                      </td>
+                      <td className="py-3 pr-4 text-muted-foreground">
+                        {req.groupId}
+                      </td>
+                      <td className="py-3">
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            disabled={busy !== null}
+                            onClick={() => void approveRegistration(req)}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy !== null}
+                            onClick={() => dismissRegistration(req)}
+                          >
+                            Dismiss
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
