@@ -229,8 +229,9 @@ async function rpc<T>(
   url: string,
   method: string,
   params: unknown[],
+  fetchImpl: typeof fetch = fetch,
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
@@ -251,10 +252,14 @@ async function rpc<T>(
 export async function sendRawSponsoredTransfer(
   rpcUrl: string,
   tx: DevnetTx,
+  fetchImpl?: typeof fetch,
 ): Promise<Hex> {
-  return rpc<Hex>(rpcUrl, "eth_sendRawTransaction", [
-    serializeSponsoredTransfer(tx),
-  ]);
+  return rpc<Hex>(
+    rpcUrl,
+    "eth_sendRawTransaction",
+    [serializeSponsoredTransfer(tx)],
+    fetchImpl,
+  );
 }
 
 /** Structured alt-mempool submission, matching @forshtat/hegota-support's `toWire`. */
@@ -296,8 +301,14 @@ export function toDevnetRpc(tx: DevnetTx) {
 export async function sendFrameSponsoredTransfer(
   rpcUrl: string,
   tx: DevnetTx,
+  fetchImpl?: typeof fetch,
 ): Promise<Hex> {
-  return rpc<Hex>(rpcUrl, "eth_sendFrameTransaction", [toDevnetRpc(tx)]);
+  return rpc<Hex>(
+    rpcUrl,
+    "eth_sendFrameTransaction",
+    [toDevnetRpc(tx)],
+    fetchImpl,
+  );
 }
 
 

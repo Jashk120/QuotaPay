@@ -26,8 +26,9 @@ async function rpc<T>(
   url: string,
   method: string,
   params: unknown[],
+  fetchImpl: typeof fetch = fetch,
 ): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
@@ -44,13 +45,17 @@ async function rpc<T>(
   return json.result as T;
 }
 
-export async function getReceipt(rpcUrl: string, hash: Hex) {
+export async function getReceipt(
+  rpcUrl: string,
+  hash: Hex,
+  fetchImpl?: typeof fetch,
+) {
   return rpc<{
     status?: string;
     blockNumber?: string;
     payer?: string;
     frameReceipts?: unknown[];
-  } | null>(rpcUrl, "eth_getTransactionReceipt", [hash]);
+  } | null>(rpcUrl, "eth_getTransactionReceipt", [hash], fetchImpl);
 }
 
 export function explorerTxUrl(base: string, hash: string) {

@@ -19,10 +19,18 @@ export const devnet = defineChain({
   rpcUrls: { default: { http: [config.rpcUrl] } },
 });
 
-export const publicClient = createPublicClient({
-  chain: devnet,
-  transport: http(config.rpcUrl),
-});
+/** Build a read client, optionally routed through anon-rpc's fetch. */
+export function makePublicClient(fetchImpl?: typeof fetch) {
+  return createPublicClient({
+    chain: devnet,
+    transport: http(
+      config.rpcUrl,
+      fetchImpl ? { fetchFn: fetchImpl } : undefined,
+    ),
+  });
+}
+
+export const publicClient = makePublicClient();
 
 export function bytes32FromLabel(label: string): Hex {
   return keccak256(stringToHex(label.trim()));
@@ -64,7 +72,9 @@ export type PaymasterSnapshot = {
 
 export async function readPaymaster(
   paymaster: Address,
+  fetchImpl?: typeof fetch,
 ): Promise<PaymasterSnapshot> {
+  const client = fetchImpl ? makePublicClient(fetchImpl) : publicClient;
   const base = { address: paymaster, abi: companyPaymasterAbi } as const;
 
   const [
@@ -78,15 +88,15 @@ export async function readPaymaster(
     pendingWithdrawals,
     availableBalance,
   ] = await Promise.all([
-    publicClient.readContract({ ...base, functionName: "admin" }),
-    publicClient.readContract({ ...base, functionName: "treasury" }),
-    publicClient.readContract({ ...base, functionName: "companyId" }),
-    publicClient.readContract({ ...base, functionName: "creditPerTx" }),
-    publicClient.readContract({ ...base, functionName: "maxSponsorCost" }),
-    publicClient.readContract({ ...base, functionName: "globalCreditLimit" }),
-    publicClient.readContract({ ...base, functionName: "companySpent" }),
-    publicClient.readContract({ ...base, functionName: "pendingWithdrawals" }),
-    publicClient.readContract({ ...base, functionName: "availableBalance" }),
+    client.readContract({ ...base, functionName: "admin" }),
+    client.readContract({ ...base, functionName: "treasury" }),
+    client.readContract({ ...base, functionName: "companyId" }),
+    client.readContract({ ...base, functionName: "creditPerTx" }),
+    client.readContract({ ...base, functionName: "maxSponsorCost" }),
+    client.readContract({ ...base, functionName: "globalCreditLimit" }),
+    client.readContract({ ...base, functionName: "companySpent" }),
+    client.readContract({ ...base, functionName: "pendingWithdrawals" }),
+    client.readContract({ ...base, functionName: "availableBalance" }),
   ]);
 
   return {
@@ -105,8 +115,10 @@ export async function readPaymaster(
 export async function isAuthorized(
   paymaster: Address,
   wallet: Address,
+  fetchImpl?: typeof fetch,
 ): Promise<boolean> {
-  return publicClient.readContract({
+  const client = fetchImpl ? makePublicClient(fetchImpl) : publicClient;
+  return client.readContract({
     address: paymaster,
     abi: companyPaymasterAbi,
     functionName: "isAuthorized",
@@ -117,8 +129,10 @@ export async function isAuthorized(
 export async function readBeneficiary(
   paymaster: Address,
   beneficiaryId: Hex,
+  fetchImpl?: typeof fetch,
 ) {
-  return publicClient.readContract({
+  const client = fetchImpl ? makePublicClient(fetchImpl) : publicClient;
+  return client.readContract({
     address: paymaster,
     abi: companyPaymasterAbi,
     functionName: "beneficiaries",

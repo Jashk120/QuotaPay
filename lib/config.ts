@@ -19,6 +19,12 @@ export const config = {
   demoMode,
   submitEnabled:
     !demoMode && process.env.NEXT_PUBLIC_ENABLE_SUBMIT === "true",
+  anonSpecifier:
+    process.env.NEXT_PUBLIC_ANON_RPC_SPECIFIER ??
+    "0x4fd77be300f31c5fe6ab266d35d27750a3478d27",
+  anonBootstrapRpc:
+    process.env.NEXT_PUBLIC_ANON_RPC_BOOTSTRAP_RPC ??
+    "https://ethereum-rpc.publicnode.com",
 };
 
 /** True when a factory address is configured, i.e. admin actions can go on-chain. */

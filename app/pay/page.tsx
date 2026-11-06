@@ -41,6 +41,8 @@ import { getActivePaymaster } from "@/lib/demo-store";
 import { blindTokenPaymasterAbi } from "@/lib/abis";
 import { findBlindToken } from "@/lib/blindTokenStore";
 import type { BlindToken } from "@/lib/blindToken";
+import { useAnonRpc } from "@/lib/anonRpc";
+import { BlindTokenIssuer } from "@/components/blind-token-issuer";
 import {
   buildSponsoredTransfer,
   getReceipt,
@@ -58,6 +60,7 @@ type Receipt = Awaited<ReturnType<typeof getReceipt>>;
 
 export default function PayPage() {
   const { session, reset } = useSessionKey();
+  const { fetch: anonFetch, mode: anonMode } = useAnonRpc();
 
   const [paymaster, setPaymaster] = useState("");
   const [to, setTo] = useState("");
@@ -96,6 +99,7 @@ export default function PayPage() {
         const ok = await isAuthorized(
           paymaster as Address,
           session.address,
+          anonFetch,
         );
         if (!cancelled) setAuthorized(ok);
       } catch {
@@ -106,7 +110,7 @@ export default function PayPage() {
     return () => {
       cancelled = true;
     };
-  }, [session, paymaster]);
+  }, [session, paymaster, anonFetch]);
 
   const serialized = useMemo(() => {
     if (!signed) return null;
@@ -126,6 +130,10 @@ export default function PayPage() {
 
     if (!session) {
       setError("Session key is still loading.");
+      return;
+    }
+    if (!blindToken) {
+      setError("Create a session-bound blind token first (Step 1).");
       return;
     }
     if (!isAddress(paymaster)) {
@@ -192,21 +200,29 @@ export default function PayPage() {
     try {
       let hash: Hex;
       try {
-        hash = await sendRawSponsoredTransfer(config.rpcUrl, signed);
-        setStatus("Accepted by eth_sendRawTransaction.");
-      } catch (rawError) {
-        setStatus("Raw RPC rejected it; trying eth_sendFrameTransaction…");
+        hash = await sendFrameSponsoredTransfer(
+          config.rpcUrl,
+          signed,
+          anonFetch,
+        );
+        setStatus("Accepted by eth_sendFrameTransaction.");
+      } catch (frameError) {
+        setStatus("Frame RPC rejected it; trying the raw encoding on the gateway…");
         try {
-          hash = await sendFrameSponsoredTransfer(config.rpcUrl, signed);
-          setStatus("Accepted by eth_sendFrameTransaction.");
-        } catch (frameError) {
+          hash = await sendRawSponsoredTransfer(
+            config.gatewayUrl,
+            signed,
+            anonFetch,
+          );
+          setStatus("Accepted by eth_sendRawTransaction.");
+        } catch (rawError) {
           throw new Error(
-            `Raw RPC: ${toMessage(rawError)}\nFrame RPC: ${toMessage(frameError)}`,
+            `Frame RPC: ${toMessage(frameError)}\nRaw RPC: ${toMessage(rawError)}`,
           );
         }
       }
       setTxHash(hash);
-      const r = await getReceipt(config.rpcUrl, hash);
+      const r = await getReceipt(config.rpcUrl, hash, anonFetch);
       setReceipt(r);
       setStatus(r ? "Mined." : "Pending in the mempool.");
     } catch (e) {
@@ -257,6 +273,22 @@ export default function PayPage() {
         </Alert>
       ) : null}
 
+      {!blindToken ? (
+        <Card data-testid="blind-required">
+          <CardHeader>
+            <CardTitle>Step 1 · Get a session-bound blind token</CardTitle>
+            <CardDescription>
+              Every sponsored payment uses a blind token. The paymaster never
+              learns which wallet you are; only the token&apos;s nullifier is
+              public.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BlindTokenIssuer onIssued={setBlindToken} />
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <Card>
           <CardHeader>
@@ -276,6 +308,18 @@ export default function PayPage() {
               <div className="mt-1 break-all font-mono text-xs" data-testid="session-address">
                 {session?.address ?? "generating…"}
               </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs" data-testid="anon-mode">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              <span className="text-muted-foreground">
+                {anonMode === "anonymous"
+                  ? "RPC: anon-rpc (anonymous)"
+                  : anonMode === "passthrough"
+                    ? "RPC: anon-rpc (passthrough — set a real specifier)"
+                    : anonMode === "starting"
+                      ? "RPC: starting anon-rpc…"
+                      : "RPC: direct (anon-rpc unavailable)"}
+              </span>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -372,24 +416,17 @@ export default function PayPage() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Charge mode</span>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={blindToken ? "success" : "secondary"}
-                  data-testid="charge-mode"
-                >
-                  {blindToken
-                    ? `Blind token · ${shortAddress(blindToken.serial, 6)}`
-                    : "CompanyPaymaster charge()"}
-                </Badge>
-                {!blindToken ? (
-                  <Button asChild size="sm" variant="ghost">
-                    <Link href="/blind">Get a blind token</Link>
-                  </Button>
-                ) : null}
-              </div>
+              <Badge
+                variant={blindToken ? "success" : "warning"}
+                data-testid="charge-mode"
+              >
+                {blindToken
+                  ? `Blind token · ${shortAddress(blindToken.serial, 6)}`
+                  : "No token · Step 1 required"}
+              </Badge>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={build} disabled={!session}>
+              <Button onClick={build} disabled={!session || !blindToken}>
                 Build & sign <ArrowRight className="h-4 w-4" />
               </Button>
               <Button

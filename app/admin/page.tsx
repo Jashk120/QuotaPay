@@ -51,6 +51,7 @@ import {
   type DemoBeneficiary,
 } from "@/lib/demo-store";
 import { useMetaMask } from "@/lib/wallet";
+import { useAnonRpc } from "@/lib/anonRpc";
 
 function nowSeconds() {
   return Math.floor(Date.now() / 1000);
@@ -58,6 +59,7 @@ function nowSeconds() {
 
 export default function AdminPage() {
   const { address: admin, connect, error: walletError } = useMetaMask();
+  const { fetch: anonFetch } = useAnonRpc();
 
   const [paymaster, setPaymaster] = useState("");
   const [companyId, setCompanyId] = useState("");
@@ -95,7 +97,7 @@ export default function AdminPage() {
     }
     if (live) {
       try {
-        const snap = await readPaymaster(paymaster as Address);
+        const snap = await readPaymaster(paymaster as Address, anonFetch);
         setSnapshot(snap);
       } catch (e) {
         setSnapshot(null);
@@ -104,7 +106,7 @@ export default function AdminPage() {
     } else {
       setSnapshot(null);
     }
-  }, [companyId, live, paymaster]);
+  }, [companyId, live, paymaster, anonFetch]);
 
   useEffect(() => {
     const pm = getActivePaymaster();
@@ -115,8 +117,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refresh]);
 
   const company = useMemo(
     () => (companyId ? getCompany(companyId) : undefined),

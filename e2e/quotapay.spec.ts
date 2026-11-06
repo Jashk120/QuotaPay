@@ -67,11 +67,27 @@ test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
     await expect(bob).toContainText("revoked");
   });
 
-  // 5. The authorized beneficiary builds/signs a four-frame sponsored payment.
-  await test.step("beneficiary builds and signs a sponsored payment", async () => {
+  // 5. The default path: issue a blind token inline, then build the payment.
+  await test.step("beneficiary issues a blind token and builds a payment", async () => {
     await page.goto("/pay");
-    await expect(page.getByLabel("Paymaster")).toHaveValue(PAYMASTER);
     await expect(page.getByTestId("session-address")).toHaveText(sessionAddress);
+    await expect(page.getByTestId("blind-required")).toBeVisible();
+
+    await page.locator("#blind-paymaster").fill(PAYMASTER);
+    await page.locator("#blind-epoch").fill("0");
+    await page.locator("#blind-maxcost").fill("0.002");
+    await page.getByTestId("blind-create").click();
+    await expect(page.getByTestId("blind-blinded")).toBeVisible();
+    await page.getByTestId("blind-sign").click();
+    await expect(page.getByTestId("blind-signed")).toBeVisible();
+    await page.getByTestId("blind-finalize").click();
+
+    // The inline issuer unmounts once the parent receives the token.
+    await expect(page.getByTestId("charge-mode")).toContainText("Blind token");
+    await expect(page.getByTestId("blind-required")).toHaveCount(0);
+
+    await expect(page.locator("#pay-paymaster")).toHaveValue(PAYMASTER);
+    await expect(page.getByTestId("anon-mode")).toBeVisible();
 
     await page.getByLabel("Recipient").fill(RECIPIENT);
     await page.getByLabel("Amount (ETH)").fill("0.001");
@@ -89,34 +105,5 @@ test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
   await test.step("submission is guarded while submit is disabled", async () => {
     await page.getByRole("button", { name: /submit sponsored tx/i }).click();
     await expect(page.getByText(/Submission is disabled/i)).toBeVisible();
-  });
-
-  // 7. Blind token issuance + redemption path.
-  await test.step("issue a session-bound blind token and use it", async () => {
-    await page.goto("/blind");
-    await expect(page.getByTestId("blind-session")).toHaveText(sessionAddress);
-    await page.getByLabel("Paymaster").fill(PAYMASTER);
-    await page.getByLabel("Epoch").fill("0");
-    await page.getByLabel("Max cost (ETH)").fill("0.002");
-    await page.getByTestId("blind-create").click();
-    await expect(page.getByTestId("blind-blinded")).toBeVisible();
-
-    await page.getByTestId("blind-sign").click();
-    await expect(page.getByTestId("blind-signed")).toBeVisible();
-
-    await page.getByTestId("blind-finalize").click();
-    await expect(page.getByTestId("blind-token")).toBeVisible();
-    await expect(page.getByTestId("blind-token")).toContainText("verified");
-    await expect(page.getByTestId("blind-signature")).toHaveText(
-      /^0x[0-9a-fA-F]{384}$/,
-    );
-
-    await page.goto("/pay");
-    await expect(page.getByLabel("Paymaster")).toHaveValue(PAYMASTER);
-    await expect(page.getByTestId("charge-mode")).toContainText("Blind token");
-    await page.getByLabel("Recipient").fill(RECIPIENT);
-    await page.getByLabel("Amount (ETH)").fill("0.001");
-    await page.getByRole("button", { name: /build & sign/i }).click();
-    await expect(page.getByTestId("signed-tx")).toBeVisible();
   });
 });
