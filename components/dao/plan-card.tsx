@@ -204,7 +204,13 @@ export function PlanCard({
               }
             >
               <ShieldCheck className="h-4 w-4" />{" "}
-              {canExecute ? "Request admin signature" : "Admin wallet required"}
+              {plan.action === "add_members"
+                ? plan.params.commitments
+                  ? "Add member on-chain"
+                  : "Create invites"
+                : canExecute
+                  ? "Request admin signature"
+                  : "Admin wallet required"}
             </Button>
           ) : (
             <Button

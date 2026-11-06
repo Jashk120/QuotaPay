@@ -28,3 +28,19 @@ create table if not exists agent_events (
   created_at timestamptz not null default now()
 );
 create index if not exists agent_events_created_idx on agent_events (created_at desc);
+
+-- DAO member invites. Off-chain until claimed. The member signs a message to
+-- derive the secret, computes the Poseidon commitment, and the admin adds that
+-- commitment to DaoCore. The invited address is the public identity and the
+-- secret never leaves the member's browser.
+create table if not exists dao_invites (
+  code text primary key,
+  dao text not null,
+  address text not null,
+  label text,
+  commitment text,
+  status text not null default 'open',
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz
+);
+create index if not exists dao_invites_dao_idx on dao_invites (dao, created_at desc);

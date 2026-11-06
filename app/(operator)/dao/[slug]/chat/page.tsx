@@ -48,6 +48,7 @@ import {
 } from "@/lib/dao/planTx";
 import { useDaoState } from "@/lib/dao/use-dao";
 import { daoSlug } from "@/lib/dao/slug";
+import { resolveMember } from "@/lib/dao/ens";
 import { useConnectedWallet } from "@/lib/wallet";
 import type {
   ActionType,
@@ -317,6 +318,10 @@ export default function DaoConsolePage() {
   }
 
   async function requestSignature(plan: Plan, call?: PreparedCall) {
+    if (plan.action === "add_members" && !plan.params.commitments) {
+      await executeOnChain(plan);
+      return;
+    }
     if (
       walletAddress &&
       state.config.adminAddress &&
@@ -437,6 +442,16 @@ export default function DaoConsolePage() {
             }
           : previous,
       );
+      if (typeof plan.params.inviteCode === "string") {
+        await fetch("/api/dao/invites", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "added",
+            code: plan.params.inviteCode,
+          }),
+        }).catch(() => {});
+      }
       setChainMessage(`Submitted ${hash}`);
       await refresh();
     } catch (cause) {
@@ -446,7 +461,93 @@ export default function DaoConsolePage() {
     }
   }
 
+  async function createInvites(plan: Plan) {
+    const members = Array.isArray(plan.params.members)
+      ? (plan.params.members as unknown as {
+          label: string;
+          address?: string | null;
+          ens?: string | null;
+        }[])
+      : [];
+    if (!members.length) {
+      setChainMessage("No members to invite.");
+      return;
+    }
+    const links: string[] = [];
+    for (const member of members) {
+      const address =
+        member.address ??
+        (member.ens ? await resolveMember(member.ens) : null);
+      if (!address) {
+        setChainMessage(
+          `Could not resolve ${member.label}. Use a 0x address or a resolvable ENS name.`,
+        );
+        return;
+      }
+      const res = await fetch("/api/dao/invites", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          dao: state.config.coreAddress,
+          address,
+          label: member.label,
+        }),
+      });
+      const json = (await res.json()) as {
+        invite?: { code: string };
+        error?: string;
+      };
+      if (!res.ok || !json.invite) {
+        setChainMessage(json.error ?? "Could not create the invite.");
+        return;
+      }
+      links.push(`${window.location.origin}/join/${json.invite.code}`);
+    }
+    setChainMessage(`Invites created: ${links.join(" · ")}`);
+  }
+
+  function addMemberFromInvite(
+    commitment: string,
+    label: string,
+    code: string,
+  ) {
+    const used = new Set(
+      state.members
+        .map((member) => member.index)
+        .filter((index): index is number => typeof index === "number"),
+    );
+    let nextIndex = 0;
+    while (used.has(nextIndex)) nextIndex += 1;
+    const plan: Plan = {
+      id: rid("invite"),
+      action: "add_members",
+      tier: 2,
+      title: `Add ${label}`,
+      summary: `Add the claimed commitment for ${label}.`,
+      resolved: [{ kind: "member", label }],
+      params: {
+        commitments: [commitment],
+        indices: [String(nextIndex)],
+        names: [label],
+        inviteCode: code,
+      },
+      checks: [],
+      authorization: "admin",
+      prompt: `add member ${label}`,
+      promptHash: "",
+      planHash: "",
+      warnings: [],
+      status: "draft",
+    };
+    void requestSignature(plan);
+  }
+
   async function executeOnChain(plan: Plan) {
+    if (plan.action === "add_members" && !plan.params.commitments) {
+      await createInvites(plan);
+      return;
+    }
     if (plan.authorization === "vote") {
       setChainMessage(
         "Governance actions need a concrete on-chain proposal target; the console does not encode arbitrary proposal calldata yet.",
@@ -759,7 +860,11 @@ export default function DaoConsolePage() {
         </div>
 
         {tab === "members" ? (
-          <MembersPanel state={state} onPrompt={sendPrompt} />
+          <MembersPanel
+            state={state}
+            onPrompt={sendPrompt}
+            onAddMember={addMemberFromInvite}
+          />
         ) : tab === "treasury" ? (
           <TreasuryPanel state={state} />
         ) : tab === "proposals" ? (

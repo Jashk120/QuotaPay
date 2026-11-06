@@ -5,12 +5,10 @@ import {
   keccak256,
   parseUnits,
   stringToHex,
-  toHex,
   type Address,
   type Hex,
 } from "viem";
 import { daoCoreAbi } from "@/lib/daoAbis.mjs";
-import { daoLeafHash } from "@/lib/zk/daoVote.mjs";
 import { DEPTH, rootAndPath } from "@/lib/zk/tree.mjs";
 import { config } from "@/lib/config";
 import type { DaoState, Member, Plan } from "./types";
@@ -111,12 +109,6 @@ function hexFromBigInt(value: bigint): Hex {
 async function rootOf(leaves: bigint[]): Promise<Hex> {
   const { root } = await rootAndPath(leaves.length ? leaves : [0n], 0, DEPTH);
   return hexFromBigInt(root);
-}
-
-function randomSecret(): bigint {
-  const bytes = new Uint8Array(32);
-  globalThis.crypto.getRandomValues(bytes);
-  return BigInt(toHex(bytes));
 }
 
 function authPlaceholder(): AdminAuth {
@@ -297,34 +289,30 @@ export async function preparePlan(
     }
 
     case "add_members": {
-      const names = Array.isArray(plan.params.names)
-        ? (plan.params.names as string[])
+      const rawCommitments = Array.isArray(plan.params.commitments)
+        ? (plan.params.commitments as string[])
         : [];
-      if (!names.length) return { ok: false, reason: "no members to add" };
+      const rawIndices = Array.isArray(plan.params.indices)
+        ? (plan.params.indices as (number | string)[]).map((value) =>
+            Number(value),
+          )
+        : [];
+      if (
+        rawCommitments.length === 0 ||
+        rawCommitments.length !== rawIndices.length
+      ) {
+        return {
+          ok: false,
+          reason: "invites must be claimed before they can be added on-chain",
+        };
+      }
+      const commitments = rawCommitments.map((value) => BigInt(value));
+      const indices = rawIndices.map((value) => BigInt(value));
       const leaves = leavesFromState(state);
-      const commitments: bigint[] = [];
-      const indices: bigint[] = [];
-      const secrets: { leaf: Hex; name: string; secret: string }[] = [];
-      const dao = BigInt(core);
-      let cursor = 0;
-      for (const name of names) {
-        while (cursor < leaves.length && leaves[cursor] !== 0n) cursor += 1;
-        const secret = randomSecret();
-        const leaf = await daoLeafHash({
-          secret,
-          dao,
-          chainId: BigInt(config.chainId),
-        });
-        while (leaves.length <= cursor) leaves.push(0n);
-        leaves[cursor] = leaf;
-        commitments.push(leaf);
-        indices.push(BigInt(cursor));
-        secrets.push({
-          leaf: hexFromBigInt(leaf),
-          name,
-          secret: `0x${secret.toString(16).padStart(64, "0")}`,
-        });
-        cursor += 1;
+      for (let i = 0; i < commitments.length; i += 1) {
+        const index = Number(indices[i]);
+        while (leaves.length <= index) leaves.push(0n);
+        leaves[index] = commitments[i];
       }
       const newRoot = await rootOf(leaves);
       const paramsHash = keccak256(
@@ -347,7 +335,6 @@ export async function preparePlan(
           paramsHash,
           tier: 2,
           needsAdmin: true,
-          secrets,
         },
       };
     }
