@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model: cfg.model,
         temperature: 0,
-        max_tokens: 200,
+        max_tokens: 600,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: buildConfigSystemPrompt() },
@@ -48,23 +48,51 @@ export async function POST(req: Request) {
     const json = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
-    const content = json.choices?.[0]?.message?.content ?? "";
-    const start = content.indexOf("{");
-    const end = content.lastIndexOf("}");
+    let content = json.choices?.[0]?.message?.content ?? "";
+    let start = content.indexOf("{");
+    let end = content.lastIndexOf("}");
+    if (start < 0 || end <= start) {
+      // Reasoning models can spend the first budget on thinking and return an
+      // empty message. Retry once with more room before falling back.
+      const retry = await fetch(`${cfg.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: cfg.model,
+          temperature: 0,
+          max_tokens: 1400,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: buildConfigSystemPrompt() },
+            { role: "user", content: prompt },
+          ],
+        }),
+      });
+      if (retry.ok) {
+        const retryJson = (await retry.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        content = retryJson.choices?.[0]?.message?.content ?? "";
+        start = content.indexOf("{");
+        end = content.lastIndexOf("}");
+      }
+    }
     if (start < 0 || end <= start) throw new Error("no JSON");
     const model = coerceDaoConfig(JSON.parse(content.slice(start, end + 1)) as unknown);
     if (!model) throw new Error("invalid config");
     // Model values win where present; deterministic parse fills the gaps.
     const merged: DaoConfigDraft = {
-      name: model.name || fallback.name,
-      treasuryUsdc: model.treasuryUsdc || fallback.treasuryUsdc,
-      perTxCap: model.perTxCap || fallback.perTxCap,
+      name: model.name ?? fallback.name,
+      treasuryUsdc: model.treasuryUsdc ?? fallback.treasuryUsdc,
+      perTxCap: model.perTxCap ?? fallback.perTxCap,
       perPeriodCap: Math.max(
-        model.perPeriodCap || fallback.perPeriodCap,
-        model.perTxCap || fallback.perTxCap,
+        model.perPeriodCap ?? fallback.perPeriodCap,
+        model.perTxCap ?? fallback.perTxCap,
       ),
-      addMemberRateLimit: model.addMemberRateLimit || fallback.addMemberRateLimit,
-      votingWindowHours: model.votingWindowHours || fallback.votingWindowHours,
+      addMemberRateLimit:
+        model.addMemberRateLimit ?? fallback.addMemberRateLimit,
+      votingWindowHours:
+        model.votingWindowHours ?? fallback.votingWindowHours,
     };
     return NextResponse.json({
       config: merged,

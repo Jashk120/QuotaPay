@@ -44,11 +44,17 @@ export function parseDaoConfig(prompt: string): DaoConfigDraft {
     /(?:per[- ]period|monthly|per[- ]month)\s*(?:cap)?\s*(?:of\s*)?\$?([\d,.]+)\s*(k)?/i,
     Math.max(perTx * 5, DEFAULT_DAO_CONFIG.perPeriodCap),
   );
-  const rate = amount(
-    text,
-    /(?:add|invite|onboard)\s*(?:up to\s*)?([\d,.]+)\s*(k)?\s*(?:members?|people|additions?)/i,
-    DEFAULT_DAO_CONFIG.addMemberRateLimit,
-  );
+  const rate =
+    amount(
+      text,
+      /(?:add|invite|onboard|up to|max(?:imum)?)\s*([\d,.]+)\s*(k)?\s*(?:members?|people|additions?)/i,
+      Number.NaN,
+    ) ||
+    amount(
+      text,
+      /([\d,.]+)\s*(k)?\s*(?:members?|people)\s*(?:max|maximum|limit)/i,
+      DEFAULT_DAO_CONFIG.addMemberRateLimit,
+    );
   const window = amount(
     text,
     /([\d,.]+)\s*(k)?\s*(?:hours?|hrs?)\s*(?:voting|vote|window)?/i,
@@ -65,31 +71,29 @@ export function parseDaoConfig(prompt: string): DaoConfigDraft {
   };
 }
 
-/** Validate a model-produced object into a safe config draft. */
-export function coerceDaoConfig(raw: unknown): DaoConfigDraft | null {
+/** Validate a model-produced object into the fields it actually returned. */
+export function coerceDaoConfig(raw: unknown): Partial<DaoConfigDraft> | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
-  const num = (v: unknown, fallback: number) => {
+  const num = (v: unknown): number | undefined => {
     const n = typeof v === "number" ? v : Number(v);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
+    return Number.isFinite(n) && n > 0 ? n : undefined;
   };
-  const name =
-    typeof r.name === "string" && r.name.trim()
-      ? r.name.trim().slice(0, 60)
-      : DEFAULT_DAO_CONFIG.name;
-  const perTx = num(r.perTxCap, DEFAULT_DAO_CONFIG.perTxCap);
-  return {
-    name,
-    treasuryUsdc: num(r.treasuryUsdc, DEFAULT_DAO_CONFIG.treasuryUsdc),
-    perTxCap: perTx,
-    perPeriodCap: Math.max(num(r.perPeriodCap, perTx * 5), perTx),
-    addMemberRateLimit: Math.round(
-      num(r.addMemberRateLimit, DEFAULT_DAO_CONFIG.addMemberRateLimit),
-    ),
-    votingWindowHours: Math.round(
-      num(r.votingWindowHours, DEFAULT_DAO_CONFIG.votingWindowHours),
-    ),
-  };
+  const out: Partial<DaoConfigDraft> = {};
+  if (typeof r.name === "string" && r.name.trim()) {
+    out.name = r.name.trim().slice(0, 60);
+  }
+  const treasury = num(r.treasuryUsdc);
+  if (treasury !== undefined) out.treasuryUsdc = treasury;
+  const perTx = num(r.perTxCap);
+  if (perTx !== undefined) out.perTxCap = perTx;
+  const perPeriod = num(r.perPeriodCap);
+  if (perPeriod !== undefined) out.perPeriodCap = perPeriod;
+  const rate = num(r.addMemberRateLimit);
+  if (rate !== undefined) out.addMemberRateLimit = Math.round(rate);
+  const window = num(r.votingWindowHours);
+  if (window !== undefined) out.votingWindowHours = Math.round(window);
+  return out;
 }
 
 export function buildConfigSystemPrompt(): string {
