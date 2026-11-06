@@ -119,6 +119,7 @@ contract MockAgent {
 /// covered by the ZK test; this one lets the governance tests run on ganache.
 contract MockVotePaymaster {
     mapping(address => mapping(uint256 => mapping(uint256 => bool))) public voteConsumed;
+    mapping(address => mapping(uint256 => mapping(uint256 => bool))) public voteChoice;
 
     function setConsumed(
         address dao,
@@ -127,5 +128,14 @@ contract MockVotePaymaster {
         bool consumed
     ) external {
         voteConsumed[dao][proposalId][nullifier] = consumed;
+    }
+
+    function setChoice(
+        address dao,
+        uint256 proposalId,
+        uint256 nullifier,
+        bool support
+    ) external {
+        voteChoice[dao][proposalId][nullifier] = support;
     }
 }

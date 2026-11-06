@@ -170,7 +170,7 @@ test("T20 DAO vote circuit, verifier and paymaster", async (t) => {
       () =>
         paymaster
           .connect(outsider)
-          .charge.staticCall(zero2, zero22, zero2, 1n, 2n, 3n),
+          .charge.staticCall(zero2, zero22, zero2, 1n, 2n, 3n, false),
       "not entrypoint"
     );
     await expectRevert(

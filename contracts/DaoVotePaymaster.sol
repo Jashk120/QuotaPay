@@ -41,6 +41,10 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     /// dao => proposalId => vote nullifier.
     mapping(address => mapping(uint256 => mapping(uint256 => bool)))
         public voteConsumed;
+    /// The choice the member signed in `charge`. `DaoCore.castVote` reads it
+    /// instead of trusting the `support` argument of a later caller.
+    mapping(address => mapping(uint256 => mapping(uint256 => bool)))
+        public voteChoice;
     mapping(bytes32 => bool) public chargedTx;
 
     uint256 public pendingWithdrawals;
@@ -55,6 +59,7 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         uint256 indexed proposalId,
         uint256 indexed nullifier,
         address indexed sessionKey,
+        bool support,
         uint256 maxCost
     );
     event Charged(bytes32 indexed sigHash, uint256 indexed nullifier);
@@ -165,7 +170,8 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         uint256[2] calldata c,
         uint256 proposalId,
         uint256 voteNullifier,
-        uint256 sessionNullifier
+        uint256 sessionNullifier,
+        bool support
     ) external {
         require(msg.sender == address(0xaa), "not entrypoint");
         require(proposalId != 0, "proposalId=0");
@@ -203,10 +209,11 @@ contract DaoVotePaymaster is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         require(!chargedTx[sigHash], "already charged");
 
         voteConsumed[dao][proposalId][voteNullifier] = true;
+        voteChoice[dao][proposalId][voteNullifier] = support;
         chargedTx[sigHash] = true;
         redeemedCount += 1;
 
-        emit Redeemed(proposalId, voteNullifier, sessionKey, maxCost);
+        emit Redeemed(proposalId, voteNullifier, sessionKey, support, maxCost);
         emit Charged(sigHash, voteNullifier);
     }
 

@@ -253,6 +253,8 @@ test("T16 DaoCore: members, caps, admin auth, proposals", async (t) => {
 
     await (await paymaster.setConsumed(coreAddr, 1n, 42n, true)).wait();
     await (await paymaster.setConsumed(coreAddr, 1n, 43n, true)).wait();
+    await (await paymaster.setChoice(coreAddr, 1n, 42n, true)).wait();
+    await (await paymaster.setChoice(coreAddr, 1n, 43n, true)).wait();
     await (await core.connect(alice).castVote(1n, true, 42n)).wait();
     await (await core.connect(bob).castVote(1n, true, 43n)).wait();
     await expectRevert(

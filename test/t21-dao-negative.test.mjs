@@ -129,6 +129,11 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
       "target not allowed"
     );
 
+    await expectRevert(
+      () => core.connect(admin).setVotePaymaster.staticCall(attackerAddr),
+      "paymaster not contract"
+    );
+
     const castVoteData = core.interface.encodeFunctionData("castVote", [
       1n,
       true,
@@ -150,6 +155,13 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
     await expectRevert(
       () => staticAgent("createProposal", [coreAddr, tokenCapData, past, ethers.ZeroHash, ethers.ZeroHash]),
       "deadline"
+    );
+
+    // A proposal created before the first paymaster would permanently close
+    // the admin bootstrap path, so it is rejected up front.
+    await expectRevert(
+      () => staticAgent("createProposal", [coreAddr, tokenCapData, 0n, ethers.ZeroHash, ethers.ZeroHash]),
+      "no paymaster"
     );
   });
 
@@ -176,6 +188,7 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
     await (await agentExecute("createProposal", [coreAddr, data, 0n, ethers.ZeroHash, ethers.ZeroHash])).wait();
     const proposalId = await core.proposalCount();
     await (await paymaster.setConsumed(coreAddr, proposalId, 5001n, true)).wait();
+    await (await paymaster.setChoice(coreAddr, proposalId, 5001n, false)).wait();
     await (await core.connect(alice).castVote(proposalId, false, 5001n)).wait();
     await chain.increaseTime(3601);
     await expectRevert(
@@ -191,8 +204,10 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
       artifacts.MockVotePaymaster.abi,
       deployer
     );
+    const nextPaymaster = await deploy(artifacts, "MockVotePaymaster", deployer);
+    const nextPaymasterAddr = await nextPaymaster.getAddress();
     const data = core.interface.encodeFunctionData("setVotePaymaster", [
-      attackerAddr,
+      nextPaymasterAddr,
     ]);
     await (
       await agentExecute("createProposal", [
@@ -205,10 +220,11 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
     ).wait();
     const proposalId = await core.proposalCount();
     await (await paymaster.setConsumed(coreAddr, proposalId, 6001n, true)).wait();
+    await (await paymaster.setChoice(coreAddr, proposalId, 6001n, true)).wait();
     await (await core.connect(alice).castVote(proposalId, true, 6001n)).wait();
     await chain.increaseTime(3601);
     await (await core.connect(alice).executeProposal(proposalId)).wait();
-    assert.equal(await core.votePaymaster(), attackerAddr);
+    assert.equal(await core.votePaymaster(), nextPaymasterAddr);
   });
 
   await t.test("bootstrap and governance-only setters stay closed", async () => {

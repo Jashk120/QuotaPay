@@ -313,6 +313,7 @@ contract DaoCore {
             require(proposalCount == 0, "proposals exist");
         }
         require(paymaster != address(0), "paymaster=0");
+        require(paymaster.code.length > 0, "paymaster not contract");
         votePaymaster = paymaster;
         emit VotePaymasterSet(paymaster);
     }
@@ -563,6 +564,7 @@ contract DaoCore {
         address to,
         AdminAuth calldata auth
     ) external onlyAgent nonReentrant {
+        require(assetModule != address(0), "no asset module");
         bytes32 paramsHash = keccak256(abi.encode(assetId, amount, to));
         _verifyAdminAuth(ACTION_DISPOSE_ASSET, paramsHash, auth);
         IAssetModule(assetModule).dispose(assetId, amount, to);
@@ -600,6 +602,9 @@ contract DaoCore {
             ? uint64(block.timestamp) + votePeriod
             : deadline;
         require(votingDeadline > block.timestamp, "deadline");
+        // The first paymaster must exist before any proposal: the admin can
+        // only bootstrap it while proposalCount == 0, and voting needs it.
+        require(votePaymaster != address(0), "no paymaster");
 
         proposalId = ++proposalCount;
         Proposal storage proposal = _proposals[proposalId];
@@ -641,6 +646,14 @@ contract DaoCore {
                 voteNullifier
             ),
             "no proof"
+        );
+        require(
+            IDaoVotePaymaster(votePaymaster).voteChoice(
+                address(this),
+                proposalId,
+                voteNullifier
+            ) == support,
+            "choice"
         );
         require(!voteNullifierUsed[proposalId][voteNullifier], "voted");
         voteNullifierUsed[proposalId][voteNullifier] = true;
@@ -748,7 +761,7 @@ contract DaoCore {
 
     /// Tier 3: the frame-introspection fallback is part of the validation
     /// policy, so switching it off needs the same member vote as any other
-    /// policy change (spec §4.1, §6.1). The deploy config sets the initial
+    /// policy change (spec §4.1, §7.3). The deploy config sets the initial
     /// value; the admin's emergency valve is `pauseAgent`.
     function setFrameEnforced(bool enforced) external onlyGovernance {
         IAgentAccount(agentAccount).setFrameEnforced(enforced);

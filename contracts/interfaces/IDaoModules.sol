@@ -39,4 +39,9 @@ interface IDaoVotePaymaster {
         external
         view
         returns (bool);
+
+    function voteChoice(address dao, uint256 proposalId, uint256 nullifier)
+        external
+        view
+        returns (bool);
 }

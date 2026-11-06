@@ -17,10 +17,11 @@ import {PolicyRule} from "./libraries/DaoTypes.sol";
 /// `AgentAccount` is `tx.sender`. Its VERIFY frame does two things:
 ///
 ///   1. Pins the transaction signature to `agentSigner`. The signature is a
-///      normal SECP256K1 signature entry (scheme 1), so the protocol verifies
-///      it and the account only checks the resolved signer. Keeping the
-///      signature out of the VERIFY frame data avoids the circular dependency
-///      of signing a payload that contains the signature.
+///      normal SECP256K1 signature entry (scheme 1) with an empty `msg`, so the
+///      protocol verifies it against the canonical transaction hash and the
+///      account only checks the resolved signer. Keeping the signature out of
+///      the VERIFY frame data avoids the circular dependency of signing a
+///      payload that contains the signature.
 ///   2. When `frameEnforced` is true, scans the post-prefix SENDER frames and
 ///      rejects any target/selector pair missing from the policy table.
 ///
@@ -145,6 +146,10 @@ contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         require(address(uint160(txparam(TxParam.SENDER))) == address(this), "not sender");
 
         require(sigparam(0, SigParam.SCHEME) == 1, "scheme");
+        // Empty `msg` means the signature covers the canonical transaction hash.
+        // An explicit 32-byte digest would let a signature the agent key produced
+        // for some other purpose authorize an arbitrary frame list.
+        require(sigparam(0, SigParam.MSG) == 0, "msg");
         require(
             address(uint160(sigparam(0, SigParam.RESOLVED_SIGNER))) == agentSigner,
             "agent signer"

@@ -124,6 +124,7 @@ test("T19 assets: tier-1 buy, tier-2 dispose, tier-3 proposals", async (t) => {
     ).wait();
     const proposalId = await core.proposalCount();
     await (await paymaster.setConsumed(coreAddr, proposalId, nullifier, true)).wait();
+    await (await paymaster.setChoice(coreAddr, proposalId, nullifier, true)).wait();
     await (await core.connect(alice).castVote(proposalId, true, nullifier)).wait();
     await chain.increaseTime(3601);
     await (await core.connect(alice).executeProposal(proposalId)).wait();
@@ -159,6 +160,17 @@ test("T19 assets: tier-1 buy, tier-2 dispose, tier-3 proposals", async (t) => {
       () => agent.execute.staticCall(coreAddr, data),
       "asset cap"
     );
+
+    // The cap is cumulative: 96 units are below the per-transaction cap but
+    // would take the total position (5 + 96) past it.
+    const cumulative = core.interface.encodeFunctionData("acquireAsset", [
+      assetId,
+      96n,
+    ]);
+    await expectRevert(
+      () => agent.execute.staticCall(coreAddr, cumulative),
+      "asset cap"
+    );
   });
 
   await t.test("tier-3 above-cap acquisition executes through a proposal", async () => {
@@ -182,7 +194,7 @@ test("T19 assets: tier-1 buy, tier-2 dispose, tier-3 proposals", async (t) => {
     ).wait();
 
     assert.equal(await module.holdings(coreAddr, assetId), 152n);
-    assert.equal(await token.balanceOf(bobAddr), 3n);
+    assert.equal(await token.balanceOf(bobAddr), ethers.parseEther("30"));
     assert.equal(await core.adminNonce(), 1n);
 
     const replayData = core.interface.encodeFunctionData("disposeAsset", [
@@ -241,6 +253,19 @@ test("T19 assets: tier-1 buy, tier-2 dispose, tier-3 proposals", async (t) => {
     await token2.mint(coreAddr, ethers.parseEther("1000"));
     await (await agentExecute("acquireAsset", [newAssetId, 4n])).wait();
     assert.equal(await module.holdings(coreAddr, newAssetId), 4n);
+  });
+
+  await t.test("asset ids are immutable once allowlisted", async () => {
+    const standalone = await deploy(artifacts, "AssetModule", deployer, [
+      deployerAddr,
+    ]);
+    await (
+      await standalone.allowAsset(id(0x7777), tokenAddr, 1n, 10n)
+    ).wait();
+    await expectRevert(
+      () => standalone.allowAsset.staticCall(id(0x7777), tokenAddr, 2n, 20n),
+      "asset exists"
+    );
   });
 
   await t.test("module and DAO gates reject outsiders", async () => {
