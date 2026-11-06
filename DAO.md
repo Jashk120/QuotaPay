@@ -33,13 +33,15 @@ separately.
 | Emergency pause / revoke | admin | `AgentAccount.pause`, `DaoCore.pauseAgent` |
 
 `AgentAccount` accepts:
-- a SECP256K1 signature entry whose resolved signer equals `agentSigner`;
+- a SECP256K1 signature entry with an empty `msg` (so the protocol checks it
+  against the canonical transaction hash) whose resolved signer equals
+  `agentSigner`;
 - only SENDER target/selector pairs present in its DAO-owned policy table
   (when `frameEnforced` is true);
 - `EXECUTION` approval only. Payment is approved separately by the paymaster.
 
-`DaoCore` re-checks every limit after execution, so a VERIFY bypass still hits
-caps, rate limits, allowlists and admin signatures.
+`DaoCore` and `AssetModule` re-check every limit after execution, so a VERIFY
+bypass still hits caps, rate limits, allowlists and admin signatures.
 
 ## Admin signature
 
@@ -111,16 +113,18 @@ dispose of an asset or change the policy without a tier-2/3 authorization.
    - vote nullifier `Poseidon(secret, proposalId)`;
    - session nullifier `Poseidon(secret, proposalId, sessionKey)`.
 3. `DaoVotePaymaster.charge` verifies the proof against
-   `DaoCore.proposalSnapshotRoot(proposalId)`, burns the nullifier and writes
-   `voteConsumed[dao][proposalId][nullifier]`.
+   `DaoCore.proposalSnapshotRoot(proposalId)`, burns the nullifier, records the
+   signed choice and writes `voteConsumed[dao][proposalId][nullifier]`.
 4. `DaoCore.castVote(proposalId, support, nullifier)` checks `voteConsumed`,
-   records its own nullifier and increments the tally.
+   requires `support` to equal the choice recorded by `charge`, records its own
+   nullifier and increments the tally.
 5. After the deadline `DaoCore.executeProposal` checks quorum and majority,
    then executes the stored call.
 
-A frame tx is atomic, so a failed `castVote` rolls the paymaster burn back.
-The admin sets the first paymaster before any proposal; after that, rotating it
-is a tier-3 proposal.
+Frames are not atomic by default. `charge` and `castVote` are separate frames
+in one transaction: if `castVote` reverts, the burned nullifier is not rolled
+back. The choice cannot be stolen, though, because `charge` stores it and
+`castVote` refuses a different value.
 
 ## Frame builders
 
@@ -128,13 +132,19 @@ is a tier-3 proposal.
 
 - `buildAgentActionFrameTx`:
   `VERIFY(AgentAccount)` -> `DEFAULT(paymaster.charge)` ->
-  `VERIFY(paymaster)` -> one or more `SENDER` calls with `ATOMIC_BATCH` on the
-  first call. `tx.sender` is the `AgentAccount`; the signature entry is the
-  agent EOA.
+  `VERIFY(paymaster)` -> one or more `SENDER` calls with `ATOMIC_BATCH` on
+  every call except the last (a single call is not a batch). `tx.sender` is the
+  `AgentAccount`; the signature entry is the agent EOA.
 - `buildPrivateVoteFrameTx`:
   `VERIFY(fresh EOA)` -> `DEFAULT(votePaymaster.charge)` ->
   `VERIFY(votePaymaster)` -> `SENDER(DaoCore.castVote)`. The fresh EOA is the
   sender and the signature signer, and the proof's session binding.
+
+`DaoVotePaymaster.charge` only verifies the proof and the charged transaction;
+it does not inspect the SENDER frames. A member can therefore spend their
+per-proposal sponsorship on an unrelated transaction, and the proof binds the
+DAO rather than the paymaster address, so a rotated paymaster still accepts
+proofs for the same DAO. Both are bounded gas-drain issues, not vote replay.
 
 `encodeDaoVoteCharge` and `encodeDaoCastVote` build the two calldata payloads.
 `signFrameTx` and `serializeFrameTx` wrap the existing devnet codec. The full

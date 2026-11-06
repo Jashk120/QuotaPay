@@ -32,7 +32,7 @@ test("T22 DAO frame layouts", async (t) => {
       chargeData: "0xdeadbeef",
       calls: [
         { to: DAO_CORE, data: "0xaaaa0001", executionGas: 200_000n },
-        { to: ASSET_MODULE, data: "0xbbbb0002" },
+        { to: DAO_CORE, data: "0xbbbb0002" },
       ],
     });
 
@@ -45,7 +45,7 @@ test("T22 DAO frame layouts", async (t) => {
     assert.equal(tx.frames[1].data, "0xdeadbeef");
     assert.equal(tx.frames[2].to, PAYMASTER);
     assert.equal(tx.frames[3].to, DAO_CORE);
-    assert.equal(tx.frames[4].to, ASSET_MODULE);
+    assert.equal(tx.frames[4].to, DAO_CORE);
     assert.equal(tx.frames[3].executionGas, 200_000n);
     assert.equal(tx.signatures[0].scheme, 1);
     assert.equal(tx.signatures[0].signer, signer);
@@ -62,6 +62,7 @@ test("T22 DAO frame layouts", async (t) => {
       calls: [{ to: DAO_CORE, data: "0x" }],
     });
     const signed = signFrameTx(tx, KEY);
+    assert.deepEqual(tx.frames.map((f) => f.flags), [2, 0, 1, 0]);
     assert.equal(signed.signatures[0].signature.length, 132);
     assert.ok(serializeFrameTx(signed).startsWith("0x06"));
   });
@@ -80,6 +81,7 @@ test("T22 DAO frame layouts", async (t) => {
       proposalId: 7n,
       voteNullifier: 42n,
       sessionNullifier: 43n,
+      support: true,
     });
     const castVoteData = encodeDaoCastVote({
       proposalId: 7n,
@@ -113,6 +115,7 @@ test("T22 DAO frame layouts", async (t) => {
     assert.equal(charge.args[3], 7n);
     assert.equal(charge.args[4], 42n);
     assert.equal(charge.args[5], 43n);
+    assert.equal(charge.args[6], true);
 
     const vote = decodeFunctionData({ abi: daoCoreAbi, data: castVoteData });
     assert.equal(vote.functionName, "castVote");

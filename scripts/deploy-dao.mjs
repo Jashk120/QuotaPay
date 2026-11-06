@@ -36,7 +36,7 @@ const STATE_PATH =
   "C:/projects/poolframes/workshop/.workshop-state.json";
 const FUND_WEI = parseEther("0.05");
 const PAYMASTER_FUND_WEI = parseEther("0.05");
-const MAX_SPONSOR_COST = parseEther("0.002");
+const MAX_SPONSOR_COST = parseEther("0.01");
 const STAKE_WEI = parseEther(process.env.DAO_STAKE_ETH ?? "0.012");
 
 function loadKey() {
