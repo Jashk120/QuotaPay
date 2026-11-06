@@ -116,7 +116,9 @@ async function main() {
     frames: [
       {
         mode: 1, // VERIFY
-        flags: 2, // approve execution
+        // No APPROVE flag: APPROVE_EXECUTION requires target == tx.sender,
+        // and the probe is a separate contract. ProbeResult is the revert.
+        flags: 0,
         to: probe,
         executionGas: 200_000n,
         stateGas: 0n,
