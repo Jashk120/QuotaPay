@@ -134,6 +134,10 @@ export type SponsoredTransferInput = {
   data?: Hex;
   /** Calldata for the DEFAULT/pre_verify frame. Defaults to CompanyPaymaster charge(). */
   chargeData?: Hex;
+  /** Execution budget for the DEFAULT/pre_verify frame. Default 70k. */
+  chargeExecutionGas?: bigint;
+  /** State budget for the DEFAULT/pre_verify frame. Default 300k. */
+  chargeStateGas?: bigint;
 };
 
 /**
@@ -166,8 +170,8 @@ export function buildSponsoredTransfer(
         mode: 0, // DEFAULT (pre_verify)
         flags: 0,
         to: input.paymaster,
-        executionGas: 70_000n,
-        stateGas: 300_000n,
+        executionGas: input.chargeExecutionGas ?? 70_000n,
+        stateGas: input.chargeStateGas ?? 300_000n,
         value: 0n,
         data: input.chargeData ?? CHARGE_CALLDATA,
       },
