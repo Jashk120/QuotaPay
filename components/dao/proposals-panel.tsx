@@ -218,9 +218,12 @@ export function ProposalsPanel({
       <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 text-xs text-muted-foreground">
         <div className="flex items-start gap-2">
           <Vote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-          The vote path uses <span className="mx-1 font-mono">scope = proposalId</span>
-          and a nullifier, so a member cannot vote twice. With a small cohort the
-          privacy claim is weak — say so during the demo.
+          <p>
+            The vote path uses{" "}
+            <span className="font-mono">scope = proposalId</span> and a
+            nullifier, so a member cannot vote twice. With a small cohort the
+            privacy claim is weak — say so during the demo.
+          </p>
         </div>
       </div>
     </div>
