@@ -238,7 +238,9 @@ contract DaoCore {
 
         // Default agent policy. The factory cannot know these addresses before
         // deployment, so the DAO installs the rules for its own selectors.
-        IAgentAccount(agentAccount_).setRule(address(this), this.addMembers.selector, true, TIER_AGENT);
+        // Root updates carry an admin co-signature until the on-chain tree lands:
+        // a compromised agent must not be able to substitute the voter set.
+        IAgentAccount(agentAccount_).setRule(address(this), this.addMembers.selector, true, TIER_ADMIN);
         IAgentAccount(agentAccount_).setRule(
             address(this),
             this.addMembersAuthorized.selector,
@@ -341,20 +343,27 @@ contract DaoCore {
 
     // ---------------------------------------------------------- membership --
 
-    /// Tier 1: add invited members within the per-period rate limit.
+    /// Tier 2: add invited members within the per-period rate limit.
+    ///
+    /// The admin co-signs the exact commitments, indices and new root. Until the
+    /// membership tree is verified on-chain, this is what stops a compromised
+    /// agent from substituting a root it controls.
     function addMembers(
         uint256[] calldata commitments,
         uint256[] calldata indices,
-        bytes32 newRoot
+        bytes32 newRoot,
+        AdminAuth calldata auth
     ) external onlyAgent {
         require(commitments.length > 0, "empty batch");
         require(commitments.length == indices.length, "length");
+        bytes32 paramsHash = keccak256(abi.encode(commitments, indices, newRoot));
+        _verifyAdminAuth(ACTION_ADD_MEMBERS, paramsHash, auth);
         _rollMemberPeriod();
         require(
             uint256(memberAddsThisPeriod) + commitments.length <= addMemberLimit,
             "rate limit"
         );
-        _addMembers(commitments, indices, newRoot, TIER_AGENT);
+        _addMembers(commitments, indices, newRoot, TIER_ADMIN);
     }
 
     /// Tier 2: add above the rate limit, authorized by the admin.

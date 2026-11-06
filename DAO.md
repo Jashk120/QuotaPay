@@ -21,7 +21,7 @@ separately.
 
 | Action | Tier | Code path |
 |---|---|---|
-| Add members within the rate limit | 1 | `DaoCore.addMembers` |
+| Add members within the rate limit | 2 | `DaoCore.addMembers` + `AdminAuth` (root co-sign) |
 | Add members above the rate limit | 2 | `DaoCore.addMembersAuthorized` + `AdminAuth` |
 | Spend within per-tx/per-period caps | 1 | `DaoCore.spend` |
 | Acquire an asset within its cap | 1 | `DaoCore.acquireAsset` |
@@ -87,23 +87,26 @@ skip the target/selector policy.
 
 The Poseidon root is supplied by the agent after an off-chain tree update, as in
 the existing `ZkPaymaster`. `leafCommitment` and `usedCommitment` make adds
-unique and replay-safe; removal still requires an admin signature and updates
-the root. Root history is kept in `knownRoot`, and every proposal stores the
-snapshot root used for its vote.
+unique and replay-safe; both adds and removal require an admin EIP-712
+signature over the exact commitments, indices and new root. Root history is
+kept in `knownRoot`, and every proposal stores the snapshot root used for its
+vote.
 
-**This is a demo shortcut, not the spec's final tree.** The contract checks
-commitment uniqueness, the add rate limit and the admin signature on removal,
-but it cannot verify that a supplied root contains only the listed
-commitments. A compromised agent could therefore inflate the voter set in a
-single root update. The production fix is an onchain Poseidon incremental tree
-(or a proof that the new root is the correct update from the old one); that
-logic belongs in a separate membership module so `DaoCoreFactory` stays under
-the EIP-170 size limit. The admin can pause the agent when a `MembershipRootUpdated`
-event looks wrong, but the root itself is not trustless in this build.
+**The root is still not verified on-chain.** The contract checks commitment
+uniqueness, the add rate limit and the admin signature, but it cannot verify
+that a supplied root contains only the listed commitments. The admin co-sign
+closes the unilateral-agent path: a compromised agent cannot substitute a root
+it controls without the admin signing that exact root. A compromised admin can
+still do so, which is why production should replace this with an onchain
+Poseidon incremental tree (or a proof that the new root is the correct update
+from the old one). That logic belongs in a separate membership module so
+`DaoCoreFactory` stays under the EIP-170 size limit. The admin can also pause
+the agent when a `MembershipRootUpdated` event looks wrong.
 
-Apart from root integrity, the spec's residual risk applies: a compromised
-agent can still add members up to the rate limit. It cannot remove a member,
-dispose of an asset or change the policy without a tier-2/3 authorization.
+With the admin co-sign, a compromised agent cannot add a member or change the
+root on its own; it can only prepare the batch and ask the admin to sign it. It
+also cannot remove a member, dispose of an asset or change the policy without a
+tier-2/3 authorization. The remaining root risk is a compromised admin.
 
 ## ZK vote flow
 
@@ -194,7 +197,8 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
   gas, so it also needs the staked/patched relay; it is not under the stock
   public 100k cap.
 - The Poseidon root is agent-supplied and not verified against the commitment
-  journal (see "Membership root"). This is the largest remaining trust gap.
+  journal (see "Membership root"). The admin co-sign prevents a unilateral
+  agent from substituting it; a compromised admin is still trusted.
 - `promptHash`/`planHash` are recorded on spends, proposals and their execution.
   Membership and asset actions carry zero hashes; the off-chain feed can label
   them from the plan store, but the on-chain event is not complete for those

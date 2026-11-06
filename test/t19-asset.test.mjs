@@ -12,6 +12,7 @@ import { newChain, deploy, expectRevert, id } from "./helpers/chain.mjs";
 const abi = ethers.AbiCoder.defaultAbiCoder();
 const h = (types, values) => ethers.keccak256(abi.encode(types, values));
 
+const ACTION_ADD_MEMBERS = 1;
 const ACTION_DISPOSE_ASSET = 4;
 
 test("T19 assets: tier-1 buy, tier-2 dispose, tier-3 proposals", async (t) => {
@@ -110,7 +111,12 @@ test("T19 assets: tier-1 buy, tier-2 dispose, tier-3 proposals", async (t) => {
   const paymaster = await deploy(artifacts, "MockVotePaymaster", deployer);
   const paymasterAddr = await paymaster.getAddress();
   await (await core.connect(admin).setVotePaymaster(paymasterAddr)).wait();
-  await (await agentExecute("addMembers", [[111n], [0n], id(0x3001)])).wait();
+  const add = [[111n], [0n], id(0x3001)];
+  const addAuth = await signAuth(
+    ACTION_ADD_MEMBERS,
+    h(["uint256[]", "uint256[]", "bytes32"], add)
+  );
+  await (await agentExecute("addMembers", [...add, addAuth])).wait();
 
   const passProposal = async (target, data, nullifier) => {
     await (
@@ -195,7 +201,7 @@ test("T19 assets: tier-1 buy, tier-2 dispose, tier-3 proposals", async (t) => {
 
     assert.equal(await module.holdings(coreAddr, assetId), 152n);
     assert.equal(await token.balanceOf(bobAddr), ethers.parseEther("30"));
-    assert.equal(await core.adminNonce(), 1n);
+    assert.equal(await core.adminNonce(), 2n);
 
     const replayData = core.interface.encodeFunctionData("disposeAsset", [
       assetId,

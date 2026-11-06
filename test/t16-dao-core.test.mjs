@@ -90,7 +90,15 @@ test("T16 DaoCore: members, caps, admin auth, proposals", async (t) => {
 
   await t.test("adds members, records roots and the commitment journal", async () => {
     const root = id(0x1001);
-    await (await agentExecute("addMembers", [[111n, 222n], [0n, 1n], root])).wait();
+    const commitments = [111n, 222n];
+    const indices = [0n, 1n];
+    const auth = await signAuth(
+      ACTION_ADD_MEMBERS,
+      h(["uint256[]", "uint256[]", "bytes32"], [commitments, indices, root])
+    );
+    await (
+      await agentExecute("addMembers", [commitments, indices, root, auth])
+    ).wait();
     assert.equal(await core.memberCount(), 2n);
     assert.equal(await core.membershipRoot(), root);
     assert.equal(await core.knownRoot(root), true);
@@ -100,39 +108,55 @@ test("T16 DaoCore: members, caps, admin auth, proposals", async (t) => {
   });
 
   await t.test("rejects duplicates, empty batches and non-agent callers", async () => {
+    const duplicate = [[111n], [2n], id(0x1002)];
+    const auth = await signAuth(
+      ACTION_ADD_MEMBERS,
+      h(["uint256[]", "uint256[]", "bytes32"], duplicate)
+    );
     const data = core.interface.encodeFunctionData("addMembers", [
-      [111n],
-      [2n],
-      id(0x1002),
+      ...duplicate,
+      auth,
     ]);
     await expectRevert(() => agent.execute.staticCall(coreAddr, data), "commitment used");
     await expectRevert(
-      () => core.connect(attacker).addMembers.staticCall([444n], [3n], id(0x1003)),
+      () =>
+        core
+          .connect(attacker)
+          .addMembers.staticCall([444n], [3n], id(0x1003), {
+            nonce: 0n,
+            expiry: 0n,
+            signature: "0x",
+          }),
       "not agent"
     );
   });
 
   await t.test("rate limit escalates to an admin-authorized add", async () => {
-    await (await agentExecute("addMembers", [[444n], [3n], id(0x1002)])).wait();
+    const first = [[444n], [3n], id(0x1002)];
+    const firstAuth = await signAuth(
+      ACTION_ADD_MEMBERS,
+      h(["uint256[]", "uint256[]", "bytes32"], first)
+    );
+    await (await agentExecute("addMembers", [...first, firstAuth])).wait();
     assert.equal(await core.memberCount(), 3n);
 
+    const next = [[555n], [4n], id(0x1003)];
+    const paramsHash = h(
+      ["uint256[]", "uint256[]", "bytes32"],
+      next
+    );
+    const auth = await signAuth(ACTION_ADD_MEMBERS, paramsHash);
     const data = core.interface.encodeFunctionData("addMembers", [
-      [555n],
-      [4n],
-      id(0x1003),
+      ...next,
+      auth,
     ]);
     await expectRevert(() => agent.execute.staticCall(coreAddr, data), "rate limit");
 
-    const paramsHash = h(
-      ["uint256[]", "uint256[]", "bytes32"],
-      [[555n], [4n], id(0x1003)]
-    );
-    const auth = await signAuth(ACTION_ADD_MEMBERS, paramsHash);
     await (
-      await agentExecute("addMembersAuthorized", [[555n], [4n], id(0x1003), auth])
+      await agentExecute("addMembersAuthorized", [...next, auth])
     ).wait();
     assert.equal(await core.memberCount(), 4n);
-    assert.equal(await core.adminNonce(), 1n);
+    assert.equal(await core.adminNonce(), 3n);
   });
 
   await t.test("tier-1 spend enforces per-tx and per-period caps", async () => {
@@ -189,7 +213,7 @@ test("T16 DaoCore: members, caps, admin auth, proposals", async (t) => {
     assert.equal(await core.memberCount(), 3n);
     assert.equal(await core.leafCommitment(1), 0n);
     assert.equal(await core.membershipRoot(), newRoot);
-    assert.equal(await core.adminNonce(), 2n);
+    assert.equal(await core.adminNonce(), 4n);
 
     // Replaying the same nonce fails even for a different member.
     const replayData = core.interface.encodeFunctionData("removeMember", [

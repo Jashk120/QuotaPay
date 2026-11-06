@@ -67,23 +67,62 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
   const latest = await chain.provider.getBlock("latest");
   const expiry = BigInt(latest.timestamp + 3600);
 
+  const addAuth = async (commitments, indices, newRoot) => {
+    const nonce = await core.adminNonce();
+    const paramsHash = h(
+      ["uint256[]", "uint256[]", "bytes32"],
+      [commitments, indices, newRoot]
+    );
+    const signature = await adminWallet.signTypedData(
+      {
+        name: "DaoCore",
+        version: "1",
+        chainId: 1337,
+        verifyingContract: coreAddr,
+      },
+      actionTypes,
+      {
+        daoCore: coreAddr,
+        chainId: 1337,
+        actionType: ACTION_ADD_MEMBERS,
+        paramsHash,
+        nonce,
+        expiry,
+      }
+    );
+    return { nonce, expiry, signature };
+  };
+
   await t.test("membership roots, indices and slots are validated", async () => {
+    const zeroRoot = [[111n], [0n], ethers.ZeroHash];
+    const zeroAuth = await addAuth(...zeroRoot);
     await expectRevert(
-      () => staticAgent("addMembers", [[111n], [0n], ethers.ZeroHash]),
+      () => staticAgent("addMembers", [...zeroRoot, zeroAuth]),
       "root=0"
     );
+
+    const badIndex = [[111n], [1n << 20n], id(0x4001)];
+    const indexAuth = await addAuth(...badIndex);
     await expectRevert(
-      () => staticAgent("addMembers", [[111n], [1n << 20n], id(0x4001)]),
+      () => staticAgent("addMembers", [...badIndex, indexAuth]),
       "index"
     );
 
-    await (await agentExecute("addMembers", [[111n], [0n], id(0x4001)])).wait();
+    const first = [[111n], [0n], id(0x4001)];
+    const firstAuth = await addAuth(...first);
+    await (await agentExecute("addMembers", [...first, firstAuth])).wait();
+
+    const slotUsed = [[222n], [0n], id(0x4002)];
+    const slotAuth = await addAuth(...slotUsed);
     await expectRevert(
-      () => staticAgent("addMembers", [[222n], [0n], id(0x4002)]),
+      () => staticAgent("addMembers", [...slotUsed, slotAuth]),
       "slot used"
     );
+
+    const commitmentUsed = [[111n], [1n], id(0x4002)];
+    const usedAuth = await addAuth(...commitmentUsed);
     await expectRevert(
-      () => staticAgent("addMembers", [[111n], [1n], id(0x4002)]),
+      () => staticAgent("addMembers", [...commitmentUsed, usedAuth]),
       "commitment used"
     );
   });
@@ -93,6 +132,7 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
       ["uint256[]", "uint256[]", "bytes32"],
       [[333n], [2n], id(0x4003)]
     );
+    const nonce = await core.adminNonce();
     const signature = await adminWallet.signTypedData(
       {
         name: "DaoCore",
@@ -106,11 +146,11 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
         chainId: 1337,
         actionType: ACTION_ADD_MEMBERS,
         paramsHash,
-        nonce: 0n,
+        nonce,
         expiry,
       }
     );
-    const auth = { nonce: 0n, expiry, signature };
+    const auth = { nonce, expiry, signature };
     await expectRevert(
       () =>
         staticAgent("addMembersAuthorized", [

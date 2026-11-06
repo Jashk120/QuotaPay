@@ -86,16 +86,16 @@ function state() {
   };
 }
 
-test("adds invited members at tier 1 within the rate limit", () => {
+test("adds invited members at tier 2 with an admin co-signature", () => {
   const reply = parsePrompt("Invite Priya and Marco", state());
   assert.equal(reply.kind, "plan");
   assert.equal(reply.plan.action, "add_members");
-  assert.equal(reply.plan.tier, 1);
-  assert.equal(reply.plan.authorization, "agent");
+  assert.equal(reply.plan.tier, 2);
+  assert.equal(reply.plan.authorization, "admin");
   assert.deepEqual(reply.plan.params.names, ["Priya", "Marco"]);
 });
 
-test("escalates member additions above the rate limit to tier 2", () => {
+test("flags member additions above the rate limit for addMembersAuthorized", () => {
   const s = state();
   s.capUsage.membersAdded = 9;
   const reply = parsePrompt("Invite Priya and Marco", s);

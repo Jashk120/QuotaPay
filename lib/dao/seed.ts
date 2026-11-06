@@ -18,9 +18,9 @@ const ADMIN = "0x1111111111111111111111111111111111111111";
 const POLICY: PolicyRow[] = [
   {
     target: "DaoCore",
-    selector: "addMembers(uint256[],uint256[],bytes32)",
-    label: "Add invited members",
-    tier: 1,
+    selector: "addMembers(uint256[],uint256[],bytes32,(uint256,uint256,bytes))",
+    label: "Add invited members (admin co-sign)",
+    tier: 2,
   },
   {
     target: "DaoCore",

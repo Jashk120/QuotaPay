@@ -384,6 +384,11 @@ test("T24 DaoSwapModule: tier-3 swap above the cap", async (t) => {
   const adminAddr = await admin.getAddress();
   const signerAddr = await agentSigner.getAddress();
   const aliceAddr = await alice.getAddress();
+  const initialAccounts = chain.gp.getInitialAccounts();
+  const adminEntry = Object.entries(initialAccounts).find(
+    ([address]) => address.toLowerCase() === adminAddr.toLowerCase()
+  );
+  const adminWallet = new ethers.Wallet(adminEntry[1].secretKey, chain.provider);
 
   const pool = await deploy(artifacts, "MockPoolManager", deployer);
   const poolAddr = await pool.getAddress();
@@ -420,11 +425,46 @@ test("T24 DaoSwapModule: tier-3 swap above the cap", async (t) => {
     await (await pool.setNextDelta(amountOut, -amountIn)).wait();
   }
 
-  // Membership is required before a proposal can be created.
+  // Membership is required before a proposal can be created; root updates are
+  // admin co-signed.
+  const add = [[111n], [0n], id(0x2401)];
+  const paramsHash = ethers.keccak256(
+    abi.encode(["uint256[]", "uint256[]", "bytes32"], add)
+  );
+  const latest = await chain.provider.getBlock("latest");
+  const expiry = BigInt(latest.timestamp + 3600);
+  const nonce = await core.adminNonce();
+  const signature = await adminWallet.signTypedData(
+    {
+      name: "DaoCore",
+      version: "1",
+      chainId: 1337,
+      verifyingContract: coreAddr,
+    },
+    {
+      Action: [
+        { name: "daoCore", type: "address" },
+        { name: "chainId", type: "uint256" },
+        { name: "actionType", type: "uint8" },
+        { name: "paramsHash", type: "bytes32" },
+        { name: "nonce", type: "uint256" },
+        { name: "expiry", type: "uint256" },
+      ],
+    },
+    {
+      daoCore: coreAddr,
+      chainId: 1337,
+      actionType: 1, // ACTION_ADD_MEMBERS
+      paramsHash,
+      nonce,
+      expiry,
+    }
+  );
+  const auth = { nonce, expiry, signature };
   await (
     await mockAgent.execute(
       coreAddr,
-      core.interface.encodeFunctionData("addMembers", [[111n], [0n], id(0x2401)])
+      core.interface.encodeFunctionData("addMembers", [...add, auth])
     )
   ).wait();
 
