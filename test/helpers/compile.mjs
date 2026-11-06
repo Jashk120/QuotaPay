@@ -13,6 +13,8 @@ const LOCAL_SOURCES = {
   "CompanyPaymaster.sol": "contracts/CompanyPaymaster.sol",
   "CompanyFactory.sol": "contracts/CompanyFactory.sol",
   "BlindTokenPaymaster.sol": "contracts/BlindTokenPaymaster.sol",
+  "ZkPaymaster.sol": "contracts/ZkPaymaster.sol",
+  "Groth16Verifier.sol": "contracts/zk/Groth16Verifier.sol",
   "QuotaPayPreVerify.sol": "contracts/QuotaPayPreVerify.sol",
   "CompanyTypes.sol": "contracts/libraries/CompanyTypes.sol",
   "IStakingRegistry.sol": "contracts/interfaces/IStakingRegistry.sol",
@@ -97,7 +99,16 @@ export function compileAll() {
       };
     }
   }
-  for (const need of ["CompanyPaymaster", "CompanyFactory", "QuotaPayPreVerify", "MockRegistry", "RevertingTreasury"]) {
+  for (const need of [
+    "CompanyPaymaster",
+    "CompanyFactory",
+    "QuotaPayPreVerify",
+    "BlindTokenPaymaster",
+    "ZkPaymaster",
+    "Groth16Verifier",
+    "MockRegistry",
+    "RevertingTreasury",
+  ]) {
     if (!artifacts[need] || !artifacts[need].bytecode || artifacts[need].bytecode === "0x") {
       throw new Error(`missing bytecode for ${need}`);
     }

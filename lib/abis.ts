@@ -28,6 +28,33 @@ export const blindTokenPaymasterAbi = parseAbi([
   "event Charged(bytes32 indexed sigHash, bytes32 indexed nullifier)",
 ]);
 
+export const zkPaymasterAbi = parseAbi([
+  "function charge(uint256[2] a, uint256[2][2] b, uint256[2] c, uint256 identityNullifier, uint256 sessionNullifier)",
+  "function root() view returns (uint256)",
+  "function epoch() view returns (uint256)",
+  "function maxSponsorCost() view returns (uint256)",
+  "function usedNullifier(uint256) view returns (bool)",
+  "function chargedTx(bytes32) view returns (bool)",
+  "function redeemedCount() view returns (uint256)",
+  "function verifier() view returns (address)",
+  "function admin() view returns (address)",
+  "function treasury() view returns (address)",
+  "function registry() view returns (address)",
+  "function setRoot(uint256 root)",
+  "function setEpoch(uint256 epoch)",
+  "function setMaxSponsorCost(uint256 maxCost)",
+  "function setWithdrawalDelay(uint64 delay)",
+  "function deposit() payable",
+  "function stake(uint32 unstakeDelaySec) payable",
+  "function requestWithdrawal(uint256 amount)",
+  "function executeWithdrawal()",
+  "function cancelWithdrawal()",
+  "event RootSet(uint256 root)",
+  "event EpochSet(uint256 epoch)",
+  "event Redeemed(uint256 indexed nullifier, address indexed sessionKey, uint256 maxCost)",
+  "event Charged(bytes32 indexed sigHash, uint256 indexed nullifier)",
+]);
+
 export const companyPaymasterAbi = parseAbi([
   "function admin() view returns (address)",
   "function treasury() view returns (address)",
