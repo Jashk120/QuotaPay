@@ -30,9 +30,20 @@ export type DemoBeneficiary = {
   createdAt: number;
 };
 
+/** A self-service sign-up from a beneficiary awaiting admin approval. */
+export type RegistrationRequest = {
+  id: string;
+  beneficiaryId: string;
+  label: string;
+  wallet: Address;
+  groupId: string;
+  requestedAt: number;
+};
+
 const KEYS = {
   companies: "quotapay.companies.v1",
   beneficiaries: "quotapay.beneficiaries.v1",
+  registrations: "quotapay.registrations.v1",
   activeCompany: "quotapay.active-company.v1",
   activePaymaster: "quotapay.active-paymaster.v1",
 } as const;
@@ -130,5 +141,22 @@ export function removeBeneficiary(companyId: string, wallet: Address) {
           b.wallet.toLowerCase() === wallet.toLowerCase()
         ),
     ),
+  );
+}
+
+export function listRegistrationRequests(): RegistrationRequest[] {
+  return read<RegistrationRequest[]>(KEYS.registrations, []);
+}
+
+export function saveRegistrationRequest(request: RegistrationRequest) {
+  const all = read<RegistrationRequest[]>(KEYS.registrations, []);
+  write(KEYS.registrations, [request, ...all]);
+}
+
+export function removeRegistrationRequest(id: string) {
+  const all = read<RegistrationRequest[]>(KEYS.registrations, []);
+  write(
+    KEYS.registrations,
+    all.filter((r) => r.id !== id),
   );
 }
