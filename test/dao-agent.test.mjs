@@ -206,6 +206,24 @@ test("refuses all actions while the agent is paused", () => {
   assert.match(reply.title, /paused/i);
 });
 
+test("resumes a paused agent only through an admin signature", () => {
+  const s = state();
+  s.config.agentPaused = true;
+  const reply = parsePrompt("Resume the agent", s);
+  assert.equal(reply.kind, "plan");
+  assert.equal(reply.plan.action, "pause");
+  assert.equal(reply.plan.params.mode, "resume");
+  assert.equal(reply.plan.authorization, "admin-only");
+});
+
+test("refuses a payout when there are no contributors", () => {
+  const s = state();
+  s.members = s.members.filter((member) => member.role === "admin");
+  const reply = parsePrompt("Pay contributors $50", s);
+  assert.equal(reply.kind, "refusal");
+  assert.match(reply.title, /no contributors/i);
+});
+
 test("falls back to a read-only summary", () => {
   const reply = parsePrompt("What is our treasury balance?", state());
   assert.equal(reply.kind, "plan");

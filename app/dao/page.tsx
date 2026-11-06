@@ -499,7 +499,7 @@ function applyPlan(
       break;
     }
     case "pause": {
-      draft.config.agentPaused = true;
+      draft.config.agentPaused = plan.params.mode !== "resume";
       break;
     }
     case "update_policy": {
