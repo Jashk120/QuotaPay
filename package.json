@@ -19,6 +19,7 @@
     "zk:sponsor": "node scripts/zk-sponsor.mjs",
     "zk:publish": "node scripts/zk-publish.mjs",
     "zk:admin": "node scripts/zk-admin.mjs",
+    "v4:probe": "node scripts/v4-probe.mjs",
     "test": "node --test \"test/*.test.mjs\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
