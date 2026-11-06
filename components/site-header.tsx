@@ -12,7 +12,6 @@ const links = [
   { href: "/company/new", label: "Register company" },
   { href: "/admin", label: "Admin" },
   { href: "/pay", label: "Pay" },
-  { href: "/zk", label: "ZK pay" },
 ];
 
 export function SiteHeader() {

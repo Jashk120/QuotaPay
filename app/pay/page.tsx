@@ -1,31 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import {
-  encodeFunctionData,
-  isAddress,
-  parseEther,
-  parseGwei,
-  type Address,
-  type Hex,
-} from "viem";
-import {
-  ArrowRight,
-  CheckCircle2,
-  Copy,
-  ExternalLink,
-  Fuel,
-  KeyRound,
-  Loader2,
-  RefreshCw,
-  Send,
-  ShieldCheck,
-  Wallet,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { KeyRound, ShieldCheck } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -33,213 +11,29 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { config, isLiveConfigured } from "@/lib/config";
-import { isAuthorized } from "@/lib/contracts";
-import { getActivePaymaster } from "@/lib/demo-store";
-import { blindTokenPaymasterAbi } from "@/lib/abis";
-import { findBlindToken } from "@/lib/blindTokenStore";
-import type { BlindToken } from "@/lib/blindToken";
+import { ZkCredentialForm } from "@/components/zk-credential-form";
+import { ZkPaymentPanel } from "@/components/zk-payment-panel";
+import { config } from "@/lib/config";
 import { useAnonRpc } from "@/lib/anonRpc";
-import { BlindTokenIssuer } from "@/components/blind-token-issuer";
 import {
-  buildSponsoredTransfer,
-  getReceipt,
-  sendFrameSponsoredTransfer,
-  sendRawSponsoredTransfer,
-  serializeSponsoredTransfer,
-  signSponsoredTransfer,
-  sponsoredTransferHash,
-  type SignedEnvelope,
-} from "@/lib/frameTx";
-import { shortAddress } from "@/lib/utils";
+  loadZkCredential,
+  saveZkCredential,
+} from "@/lib/zk/credentialStore";
+import type { ZkCredential } from "@/lib/zk/client";
 import { useSessionKey } from "@/lib/wallet";
-
-type Receipt = Awaited<ReturnType<typeof getReceipt>>;
 
 export default function PayPage() {
   const { session, reset } = useSessionKey();
-  const { fetch: anonFetch, mode: anonMode } = useAnonRpc();
-
-  const [paymaster, setPaymaster] = useState("");
-  const [to, setTo] = useState("");
-  const [amountEth, setAmountEth] = useState("0.001");
-  const [nonce, setNonce] = useState("0");
-  const [maxFeeGwei, setMaxFeeGwei] = useState("2");
-  const [authorized, setAuthorized] = useState<boolean | null>(null);
-  const [signed, setSigned] = useState<SignedEnvelope | null>(null);
-  const [txHash, setTxHash] = useState<Hex | null>(null);
-  const [receipt, setReceipt] = useState<Receipt>(null);
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [blindToken, setBlindToken] = useState<BlindToken | null>(null);
+  const { mode: anonMode } = useAnonRpc();
+  const [credential, setCredential] = useState<ZkCredential | null>(null);
 
   useEffect(() => {
-    setPaymaster(getActivePaymaster());
+    setCredential(loadZkCredential());
   }, []);
 
-  useEffect(() => {
-    if (!session || !isAddress(paymaster)) {
-      setBlindToken(null);
-      return;
-    }
-    setBlindToken(findBlindToken(session.address, paymaster));
-  }, [session, paymaster]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function check() {
-      if (!session || !isAddress(paymaster) || !isLiveConfigured) {
-        setAuthorized(null);
-        return;
-      }
-      try {
-        const ok = await isAuthorized(
-          paymaster as Address,
-          session.address,
-          anonFetch,
-        );
-        if (!cancelled) setAuthorized(ok);
-      } catch {
-        if (!cancelled) setAuthorized(null);
-      }
-    }
-    void check();
-    return () => {
-      cancelled = true;
-    };
-  }, [session, paymaster, anonFetch]);
-
-  const serialized = useMemo(() => {
-    if (!signed) return null;
-    try {
-      return serializeSponsoredTransfer(signed);
-    } catch {
-      return null;
-    }
-  }, [signed]);
-
-  function build() {
-    setError(null);
-    setStatus(null);
-    setReceipt(null);
-    setTxHash(null);
-    setSigned(null);
-
-    if (!session) {
-      setError("Session key is still loading.");
-      return;
-    }
-    if (!blindToken) {
-      setError("Create a session-bound blind token first (Step 1).");
-      return;
-    }
-    if (!isAddress(paymaster)) {
-      setError("Enter the deployed paymaster address.");
-      return;
-    }
-    if (!isAddress(to)) {
-      setError("Recipient must be a valid address.");
-      return;
-    }
-
-    try {
-      const chargeData: Hex | undefined = blindToken
-        ? encodeFunctionData({
-            abi: blindTokenPaymasterAbi,
-            functionName: "charge",
-            args: [
-              {
-                sessionKey: blindToken.sessionKey,
-                paymaster: blindToken.paymaster,
-                chainId: BigInt(blindToken.chainId),
-                epoch: BigInt(blindToken.epoch),
-                maxCost: blindToken.maxCost,
-                serial: blindToken.serial,
-                signature: blindToken.signature,
-              },
-            ],
-          })
-        : undefined;
-      const envelope = buildSponsoredTransfer({
-        sender: session.address,
-        paymaster: paymaster as Address,
-        to: to as Address,
-        value: parseEther(amountEth || "0"),
-        nonce: BigInt(nonce || "0"),
-        chainId: config.chainId,
-        maxFeePerGas: parseGwei(maxFeeGwei || "2"),
-        maxPriorityFeePerGas: parseGwei(maxFeeGwei || "2"),
-        chargeData,
-      });
-      const signedEnvelope = signSponsoredTransfer(
-        envelope,
-        session.privateKey,
-      );
-      setSigned(signedEnvelope);
-      setTxHash(sponsoredTransferHash(signedEnvelope));
-      setStatus("Transaction built and signed locally.");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function send() {
-    if (!signed) return;
-    if (!config.submitEnabled) {
-      setError(
-        "Submission is disabled. Set NEXT_PUBLIC_ENABLE_SUBMIT=true and an EIP-8141 RPC URL.",
-      );
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setStatus("Submitting to the EIP-8141 RPC…");
-    try {
-      let hash: Hex;
-      try {
-        hash = await sendFrameSponsoredTransfer(
-          config.rpcUrl,
-          signed,
-          anonFetch,
-        );
-        setStatus("Accepted by eth_sendFrameTransaction.");
-      } catch (frameError) {
-        setStatus("Frame RPC rejected it; trying the raw encoding on the gateway…");
-        try {
-          hash = await sendRawSponsoredTransfer(
-            config.gatewayUrl,
-            signed,
-            anonFetch,
-          );
-          setStatus("Accepted by eth_sendRawTransaction.");
-        } catch (rawError) {
-          throw new Error(
-            `Frame RPC: ${toMessage(frameError)}\nRaw RPC: ${toMessage(rawError)}`,
-          );
-        }
-      }
-      setTxHash(hash);
-      const r = await getReceipt(config.rpcUrl, hash, anonFetch);
-      setReceipt(r);
-      setStatus(r ? "Mined." : "Pending in the mempool.");
-    } catch (e) {
-      setStatus(null);
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function copy(value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setStatus("Copied to clipboard.");
-    } catch {
-      setStatus("Could not access the clipboard.");
-    }
+  function updateCredential(next: ZkCredential | null) {
+    setCredential(next);
+    if (next) saveZkCredential(next);
   }
 
   return (
@@ -247,314 +41,126 @@ export default function PayPage() {
       <div className="space-y-2">
         <Badge variant="outline">Beneficiary · sponsored payment</Badge>
         <h1 className="text-3xl font-semibold tracking-tight">
-          Let the paymaster cover it
+          Prove eligibility, not identity
         </h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          This builds a four-frame EIP-8141 transaction with Ox, signs it with a
-          local session key, and submits it to the EIP-8141 RPC. The beneficiary
-          holds 0 ETH; the company paymaster pays.
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          This builds a four-frame EIP-8141 transaction with a Groth16
+          membership proof, signs it with a local session key, and submits it
+          to the EIP-8141 RPC. The beneficiary holds 0 ETH; the company
+          paymaster pays. The paymaster learns a rotating session key and a
+          nullifier — never which employee is paying.
         </p>
       </div>
 
-      {!config.submitEnabled ? (
-        <Alert variant="warning" title="Submission disabled">
-          Set <span className="font-mono">NEXT_PUBLIC_ENABLE_SUBMIT=true</span>{" "}
-          to broadcast. You can still build, sign, and inspect the transaction.
-        </Alert>
-      ) : null}
-      {error ? (
-        <Alert variant="error" title="Payment failed">
-          <div className="whitespace-pre-wrap break-words">{error}</div>
-        </Alert>
-      ) : null}
-      {status ? (
-        <Alert variant="info" title="Status">
-          {status}
+      {!config.zkPaymaster ? (
+        <Alert variant="info" title="No default ZK paymaster configured">
+          Set <span className="font-mono">NEXT_PUBLIC_ZK_PAYMASTER</span> after{" "}
+          <span className="font-mono">npm run zk:deploy</span>, or paste a
+          credential whose <span className="font-mono">paymaster</span> field
+          points at a deployed <span className="font-mono">ZkPaymaster</span>.
         </Alert>
       ) : null}
 
-      {!blindToken ? (
-        <Card data-testid="blind-required">
-          <CardHeader>
-            <CardTitle>Step 1 · Get a session-bound blind token</CardTitle>
-            <CardDescription>
-              Every sponsored payment uses a blind token. The paymaster never
-              learns which wallet you are; only the token&apos;s nullifier is
-              public.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BlindTokenIssuer onIssued={setBlindToken} />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5 text-primary" /> Beneficiary signer
-            </CardTitle>
-            <CardDescription>
-              A session key in this browser. The address must be authorized by
-              the company admin.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-lg border border-border/60 bg-background/50 p-3">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Session address
-              </div>
-              <div className="mt-1 break-all font-mono text-xs" data-testid="session-address">
-                {session?.address ?? "generating…"}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs" data-testid="anon-mode">
-              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-              <span className="text-muted-foreground">
-                {anonMode === "anonymous"
-                  ? "RPC: anon-rpc (anonymous)"
-                  : anonMode === "passthrough"
-                    ? "RPC: anon-rpc (passthrough — set a real specifier)"
-                    : anonMode === "starting"
-                      ? "RPC: starting anon-rpc…"
-                      : "RPC: direct (anon-rpc unavailable)"}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => session && void copy(session.address)}
-              >
-                <Copy className="h-4 w-4" /> Copy address
-              </Button>
-              <Button variant="outline" size="sm" onClick={reset}>
-                <RefreshCw className="h-4 w-4" /> New key
-              </Button>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/admin">
-                  Enroll in admin <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <ShieldCheck className="h-4 w-4 text-primary" />
-              {authorized === null ? (
-                <span className="text-muted-foreground">
-                  Authorization status unavailable (demo / no RPC).
-                </span>
-              ) : authorized ? (
-                <span className="text-emerald-300">Wallet is authorized</span>
-              ) : (
-                <span className="text-red-300">
-                  Wallet is not authorized — enroll it first.
-                </span>
-              )}
-            </div>
-            <Alert variant="info" title="Why a session key?">
-              MetaMask cannot construct or broadcast EIP-8141 frame
-              transactions. The session key satisfies the EOA VERIFY frame; the
-              app relays the signed envelope.
-            </Alert>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Send className="h-5 w-5 text-primary" /> Payment
-            </CardTitle>
-            <CardDescription>
-              The paymaster address must point at your company instance.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field label="Paymaster" htmlFor="pay-paymaster" hint="CompanyPaymaster">
-              <Input
-                id="pay-paymaster"
-                value={paymaster}
-                onChange={(e) => setPaymaster(e.target.value.trim())}
-                placeholder="0x…"
-                className="font-mono text-xs"
-              />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Recipient" htmlFor="pay-to" hint="0x…">
-                <Input
-                  id="pay-to"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value.trim())}
-                  placeholder="0x…"
-                  className="font-mono text-xs"
-                />
-              </Field>
-              <Field label="Amount (ETH)" htmlFor="pay-amount">
-                <Input
-                  id="pay-amount"
-                  value={amountEth}
-                  onChange={(e) => setAmountEth(e.target.value)}
-                  inputMode="decimal"
-                />
-              </Field>
-              <Field label="Nonce" htmlFor="pay-nonce" hint="account nonce">
-                <Input
-                  id="pay-nonce"
-                  value={nonce}
-                  onChange={(e) => setNonce(e.target.value)}
-                  inputMode="numeric"
-                />
-              </Field>
-              <Field label="Max fee (gwei)" htmlFor="pay-fee">
-                <Input
-                  id="pay-fee"
-                  value={maxFeeGwei}
-                  onChange={(e) => setMaxFeeGwei(e.target.value)}
-                  inputMode="decimal"
-                />
-              </Field>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Charge mode</span>
-              <Badge
-                variant={blindToken ? "success" : "warning"}
-                data-testid="charge-mode"
-              >
-                {blindToken
-                  ? `Blind token · ${shortAddress(blindToken.serial, 6)}`
-                  : "No token · Step 1 required"}
-              </Badge>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={build} disabled={!session || !blindToken}>
-                Build & sign <ArrowRight className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => void send()}
-                disabled={!signed || busy}
-              >
-                {busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Fuel className="h-4 w-4" />
-                )}
-                Submit sponsored tx
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-3 md:grid-cols-3">
+        <InfoCard
+          icon={<KeyRound className="h-4 w-4 text-primary" />}
+          title="Session key"
+          body={session?.address ?? "generating…"}
+        />
+        <InfoCard
+          icon={<ShieldCheck className="h-4 w-4 text-primary" />}
+          title="Proof system"
+          body="Groth16 / BN254, 7 public inputs, ~256k verifier gas"
+        />
+        <InfoCard
+          icon={<ShieldCheck className="h-4 w-4 text-primary" />}
+          title="Transport"
+          body={
+            anonMode === "anonymous"
+              ? "anon-rpc (anonymous)"
+              : anonMode === "direct"
+                ? "direct RPC (privacy off)"
+                : `anon-rpc (${anonMode})`
+          }
+        />
       </div>
 
-      {signed ? (
-        <Card data-testid="signed-tx">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-primary" /> Signed frame
-              transaction
-            </CardTitle>
-            <CardDescription>
-              {txHash ? `Hash ${shortAddress(txHash, 8)}` : null}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Info label="Chain ID" value={String(config.chainId)} />
-              <Info label="Frames" value={String(signed.frames.length)} />
-              <Info
-                label="Serialized"
-                value={`${serialized ? (serialized.length - 2) / 2 : 0} bytes`}
-              />
-            </div>
-            <div className="space-y-2">
-              {signed.frames.map((frame, index) => (
-                <div
-                  key={index}
-                  className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-background/40 p-3 text-xs"
-                >
-                  <Badge variant="secondary" className="font-mono">
-                    #{index} · {String(frame.mode)}
-                  </Badge>
-                  <span className="text-muted-foreground">
-                    flags {String(frame.flags)} · exec{" "}
-                    {String(frame.executionGas ?? 0n)} · state{" "}
-                    {String(frame.stateGas ?? 0n)}
-                  </span>
-                  <span className="ml-auto font-mono text-muted-foreground">
-                    {frame.to ? shortAddress(frame.to, 6) : "sender"}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button asChild size="sm" variant="outline">
-                <a
-                  href={`${config.explorerUrl.replace(/\/$/, "")}/tx/${txHash ?? ""}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <ExternalLink className="h-4 w-4" /> Explorer
-                </a>
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => session && void copy(session.address)}
-              >
-                <Copy className="h-4 w-4" /> Copy signer
-              </Button>
-            </div>
-            {receipt ? (
-              <div className="rounded-lg border border-border/60 bg-background/40 p-3 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="success">mined</Badge>
-                  <span className="text-muted-foreground">
-                    block {receipt.blockNumber ?? "—"}
-                  </span>
-                  <span className="text-muted-foreground">
-                    payer {receipt.payer ? shortAddress(receipt.payer, 6) : "—"}
-                  </span>
-                  <span className="text-muted-foreground">
-                    frames {receipt.frameReceipts?.length ?? 0}
-                  </span>
-                </div>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      <ZkCredentialForm
+        credential={credential}
+        sessionAddress={session?.address ?? null}
+        onCredential={updateCredential}
+      />
+
+      <ZkPaymentPanel
+        session={session}
+        credential={credential}
+        onResetSession={reset}
+      />
 
       <Card>
-        <CardContent className="flex flex-col gap-3 p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span className="flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-primary" />
-            The paymaster pays the gas; the beneficiary needs 0 ETH.
-          </span>
-          <span className="flex items-center gap-2">
-            <Spark /> Wire-format compatibility: see{" "}
-            <span className="font-mono text-xs">npm run compat</span>
-          </span>
+        <CardHeader>
+          <CardTitle>Setup</CardTitle>
+          <CardDescription>
+            The proof assets are generated locally and are gitignored.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            <span className="font-mono text-foreground">npm run zk:setup</span>{" "}
+            compiles the circuit, builds the devnet zkey, and exports the
+            verifier.
+          </p>
+          <p>
+            <span className="font-mono text-foreground">npm run zk:deploy</span>{" "}
+            deploys the verifier + paymaster, sets the root, and stakes.
+          </p>
+          <p>
+            <span className="font-mono text-foreground">npm run zk:publish</span>{" "}
+            copies the wasm/zkey to <span className="font-mono">public/zk</span>{" "}
+            and writes the demo credential.
+          </p>
+          <p>
+            The CLI equivalent is{" "}
+            <span className="font-mono text-foreground">npm run zk:sponsor</span>.
+          </p>
         </CardContent>
       </Card>
-    </div>
-  );
-}
 
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border/60 bg-background/40 p-3">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>Session rotation:</span>
+        <button
+          type="button"
+          onClick={reset}
+          className="rounded-md border border-border/60 px-2 py-1 text-foreground transition-colors hover:bg-accent"
+        >
+          generate a new session key
+        </button>
+        <span>(the old credential will no longer match the new sender)</span>
       </div>
-      <div className="mt-1 text-sm font-medium">{value}</div>
     </div>
   );
 }
 
-function Spark() {
-  return <span className="inline-block h-2 w-2 rounded-full bg-primary" />;
-}
-
-function toMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+function InfoCard({
+  icon,
+  title,
+  body,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-start gap-3 p-4">
+        <div className="mt-0.5">{icon}</div>
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            {title}
+          </div>
+          <div className="mt-1 break-all font-mono text-xs">{body}</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
