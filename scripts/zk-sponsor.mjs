@@ -29,7 +29,6 @@ import {
   sponsoredTransferHash,
 } from "../lib/devnetFrameTx.ts";
 import { membershipWitness } from "../lib/zk/tree.mjs";
-
 function loadEnv() {
   const env = {};
   if (!fs.existsSync(".env.local")) return env;
@@ -46,7 +45,8 @@ if (!fs.existsSync("deployments/zk-1337.json")) {
   throw new Error("deployments/zk-1337.json missing; run node scripts/deploy-zk.mjs");
 }
 const deployment = JSON.parse(fs.readFileSync("deployments/zk-1337.json", "utf8"));
-const rpcUrl = env.NEXT_PUBLIC_RPC_URL ?? deployment.rpc;
+const rpcUrl =
+  process.env.ZK_RPC_URL ?? env.NEXT_PUBLIC_RPC_URL ?? deployment.rpc;
 const paymaster = deployment.paymaster;
 const chainId = Number(deployment.chainId);
 const root = BigInt(deployment.root);
@@ -57,7 +57,13 @@ if (!env.DEMO_ZK_SECRET || !env.DEMO_ZK_SESSION_KEY) {
   );
 }
 const secret = BigInt(env.DEMO_ZK_SECRET);
-const leaves = deployment.demo.leaves.map(BigInt);
+const leavesState = fs.existsSync("deployments/zk-leaves.json")
+  ? JSON.parse(fs.readFileSync("deployments/zk-leaves.json", "utf8"))
+  : null;
+// deployments/zk-leaves.json is canonical (zk-admin keeps it current after
+// every add/remove); the deployment file only has the genesis leaves.
+// Mismatched leaves produce an unsatisfiable witness, so prefer the file.
+const leaves = (leavesState?.leaves ?? deployment.demo.leaves).map(BigInt);
 const sessionKey = env.DEMO_ZK_SESSION_KEY;
 const session = privateKeyToAccount(sessionKey);
 const to = process.env.ZK_TO ?? "0x000000000000000000000000000000000000dEaD";
@@ -95,18 +101,41 @@ async function main() {
     }
   }
 
+  // Root and epoch are read live: zk-admin may have rotated them after the
+  // deployment record was written. The witness must match the chain.
+  const [liveRoot, liveEpoch] = await Promise.all([
+    read("root"),
+    read("epoch"),
+  ]);
+  console.log(`on-chain root:  ${liveRoot}`);
+  console.log(`on-chain epoch: ${liveEpoch}`);
+
+  // The demo secret's leaf index in the canonical leaves file.
+  const { leafHash } = await import("../lib/zk/tree.mjs");
+  const demoLeaf = await leafHash({
+    secret,
+    paymaster: BigInt(paymaster),
+    chainId,
+  });
+  const index = leaves.findIndex((v) => v === demoLeaf);
+  if (index < 0) {
+    throw new Error(
+      "DEMO_ZK_SECRET's leaf is not in deployments/zk-leaves.json; add it with npm run zk:admin -- add <leaf>",
+    );
+  }
+
   const witness = await membershipWitness({
     secret,
     paymaster: BigInt(paymaster),
     chainId,
-    epoch,
+    epoch: liveEpoch,
     sessionKey: BigInt(session.address),
     leaves,
-    index: 0,
+    index,
   });
-  if (BigInt(witness.root) !== root) {
+  if (BigInt(witness.root) !== liveRoot) {
     throw new Error(
-      `tree root mismatch: witness ${witness.root} vs deployed ${root}; regenerate the root or the path`,
+      `tree root mismatch: witness ${witness.root} vs on-chain ${liveRoot}; redistribute paths with npm run zk:admin -- paths`,
     );
   }
   const used = await read("usedNullifier", [

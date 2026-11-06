@@ -98,6 +98,40 @@ snark(
   path.resolve("contracts/zk/Groth16Verifier.sol"),
 );
 
+// snarkjs forwards precompile gas with sub(gas(), 2000), but GAS is banned in
+// the EIP-8141 validation prefix (the charge frame runs as the payer). Patch
+// the three staticcalls to forward fixed EIP-1108 costs instead. Consumption
+// is unchanged: precompiles charge fixed costs, not the forwarded amount.
+{
+  const verifierPath = path.resolve("contracts/zk/Groth16Verifier.sol");
+  let source = fs.readFileSync(verifierPath, "utf8");
+  const patches = [
+    [
+      "success := staticcall(sub(gas(), 2000), 7, mIn, 96, mIn, 64)",
+      "success := staticcall(30000, 7, mIn, 96, mIn, 64)",
+    ],
+    [
+      "success := staticcall(sub(gas(), 2000), 6, mIn, 128, pR, 64)",
+      "success := staticcall(30000, 6, mIn, 128, pR, 64)",
+    ],
+    [
+      "let success := staticcall(sub(gas(), 2000), 8, _pPairing, 768, _pPairing, 0x20)",
+      "let success := staticcall(200000, 8, _pPairing, 768, _pPairing, 0x20)",
+    ],
+  ];
+  for (const [from, to] of patches) {
+    if (!source.includes(from)) {
+      throw new Error(`verifier patch target missing: ${from}`);
+    }
+    source = source.replaceAll(from, to);
+  }
+  if (source.includes("sub(gas(), 2000)")) {
+    throw new Error("unpatched sub(gas(), 2000) remains in the verifier");
+  }
+  fs.writeFileSync(verifierPath, source);
+  console.log("patched Groth16Verifier.sol: fixed precompile gas forwarding");
+}
+
 console.log(`\nwrote ${finalZkey}`);
 console.log("wrote contracts/zk/Groth16Verifier.sol");
 console.log("next: node scripts/zk-proof.mjs && node scripts/zk-bench.mjs");
