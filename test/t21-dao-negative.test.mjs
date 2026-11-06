@@ -184,6 +184,33 @@ test("T21 DaoCore: rejected roots, targets, votes and emergency pause", async (t
     );
   });
 
+  await t.test("governance can rotate the vote paymaster", async () => {
+    const paymasterAddr = await core.votePaymaster();
+    const paymaster = new ethers.Contract(
+      paymasterAddr,
+      artifacts.MockVotePaymaster.abi,
+      deployer
+    );
+    const data = core.interface.encodeFunctionData("setVotePaymaster", [
+      attackerAddr,
+    ]);
+    await (
+      await agentExecute("createProposal", [
+        coreAddr,
+        data,
+        0n,
+        ethers.ZeroHash,
+        ethers.ZeroHash,
+      ])
+    ).wait();
+    const proposalId = await core.proposalCount();
+    await (await paymaster.setConsumed(coreAddr, proposalId, 6001n, true)).wait();
+    await (await core.connect(alice).castVote(proposalId, true, 6001n)).wait();
+    await chain.increaseTime(3601);
+    await (await core.connect(alice).executeProposal(proposalId)).wait();
+    assert.equal(await core.votePaymaster(), attackerAddr);
+  });
+
   await t.test("bootstrap and governance-only setters stay closed", async () => {
     await expectRevert(
       () => core.connect(admin).setVotePaymaster.staticCall(attackerAddr),

@@ -28,7 +28,7 @@ separately.
 | Remove a member | 2 | `DaoCore.removeMember` + `AdminAuth` |
 | Change a role | 2 | `DaoCore.setRole` + `AdminAuth` |
 | Dispose of an asset | 2 | `DaoCore.disposeAsset` + `AdminAuth` |
-| Spend/acquire above caps, allowlist, caps, policy, agent key, admin | 3 | proposal -> `DaoCore.executeProposal` |
+| Spend/acquire above caps, allowlist, caps, policy, agent key, admin, vote paymaster | 3 | proposal -> `DaoCore.executeProposal` |
 | Emergency pause / revoke | admin | `AgentAccount.pause`, `DaoCore.pauseAgent` |
 
 `AgentAccount` accepts:
@@ -108,6 +108,8 @@ an asset or change the policy without a tier-2/3 authorization.
    then executes the stored call.
 
 A frame tx is atomic, so a failed `castVote` rolls the paymaster burn back.
+The admin sets the first paymaster before any proposal; after that, rotating it
+is a tier-3 proposal.
 
 ## Frame builders
 

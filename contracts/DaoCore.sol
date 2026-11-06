@@ -221,6 +221,7 @@ contract DaoCore {
         governanceSelector[this.setPolicy.selector] = true;
         governanceSelector[this.setAgentSigner.selector] = true;
         governanceSelector[this.setAdmin.selector] = true;
+        governanceSelector[this.setVotePaymaster.selector] = true;
         governanceSelector[this.spendAboveCap.selector] = true;
         governanceSelector[this.acquireAssetAboveCap.selector] = true;
 
@@ -300,10 +301,16 @@ contract DaoCore {
         }
     }
 
-    /// One-time bootstrap. After the first proposal, the paymaster can only be
-    /// changed by a vote.
-    function setVotePaymaster(address paymaster) external onlyAdmin {
-        require(proposalCount == 0, "proposals exist");
+    /// Bootstrap by the admin before the first proposal, or rotate through a
+    /// tier-3 proposal after that.
+    function setVotePaymaster(address paymaster) external {
+        if (msg.sender == address(this)) {
+            // Governance path: executeProposal self-calls this function.
+        } else {
+            require(msg.sender == admin, "not admin");
+            require(proposalCount == 0, "proposals exist");
+        }
+        require(paymaster != address(0), "paymaster=0");
         votePaymaster = paymaster;
         emit VotePaymasterSet(paymaster);
     }
