@@ -57,7 +57,7 @@ export function MembersPanel({
   }
 
   async function copyInvite(code: string) {
-    const url = `${window.location.origin}/dao/join/${code}`;
+    const url = `${window.location.origin}/join/${code}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(code);
@@ -199,7 +199,7 @@ export function MembersPanel({
                   </div>
                   <div className="flex items-center gap-1">
                     <Button asChild size="sm" variant="ghost">
-                      <Link href={`/dao/join/${invite.code}`}>
+                      <Link href={`/join/${invite.code}`}>
                         <Link2 className="h-3.5 w-3.5" /> Open
                       </Link>
                     </Button>
