@@ -45,12 +45,15 @@ export default function NewDaoPage() {
 
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [name, setName] = useState("New Collective");
+  const [treasury, setTreasury] = useState("5000");
   const [funding, setFunding] = useState("0.05");
   const [perTx, setPerTx] = useState("200");
   const [perPeriod, setPerPeriod] = useState("1000");
   const [rateLimit, setRateLimit] = useState("10");
   const [windowHours, setWindowHours] = useState("48");
   const [interpreting, setInterpreting] = useState(false);
+  const [interpreted, setInterpreted] = useState(false);
+  const [configSource, setConfigSource] = useState<string | null>(null);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
@@ -75,8 +78,12 @@ export default function NewDaoPage() {
           addMemberRateLimit: number;
           votingWindowHours: number;
         };
+        source?: string;
+        llmError?: string;
       };
+      setConfigSource(json.source ?? "local");
       setName(json.config.name);
+      setTreasury(String(json.config.treasuryUsdc));
       setPerTx(String(json.config.perTxCap));
       setPerPeriod(String(json.config.perPeriodCap));
       setRateLimit(String(json.config.addMemberRateLimit));
@@ -84,13 +91,16 @@ export default function NewDaoPage() {
     } catch {
       const { parseDaoConfig } = await import("@/lib/dao/config");
       const cfg = parseDaoConfig(prompt);
+      setConfigSource("local");
       setName(cfg.name);
+      setTreasury(String(cfg.treasuryUsdc));
       setPerTx(String(cfg.perTxCap));
       setPerPeriod(String(cfg.perPeriodCap));
       setRateLimit(String(cfg.addMemberRateLimit));
       setWindowHours(String(cfg.votingWindowHours));
     } finally {
       setInterpreting(false);
+      setInterpreted(true);
     }
   }
 
@@ -220,18 +230,30 @@ export default function NewDaoPage() {
             aria-label="DAO prompt"
             className="w-full resize-none rounded-lg border border-input bg-white px-3 py-2 text-sm shadow-[inset_0_1px_2px_hsl(40_30%_20%/0.04)] outline-none focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
           />
-          <Button
-            size="sm"
-            onClick={() => void interpret()}
-            disabled={interpreting}
-          >
-            {interpreting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Wand2 className="h-4 w-4" />
-            )}
-            Interpret config
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => void interpret()}
+              disabled={interpreting}
+            >
+              {interpreting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Wand2 className="h-4 w-4" />
+              )}
+              Interpret config
+            </Button>
+            {interpreted ? (
+              <Badge variant="success">config parsed</Badge>
+            ) : null}
+            {configSource ? (
+              <Badge variant="outline">
+                {configSource.startsWith("llm:")
+                  ? configSource
+                  : "parser: local"}
+              </Badge>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 
@@ -249,6 +271,13 @@ export default function NewDaoPage() {
                 id="dao-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
+              />
+            </Field>
+            <Field label="Treasury (USDC)" htmlFor="dao-treasury">
+              <Input
+                id="dao-treasury"
+                value={treasury}
+                onChange={(event) => setTreasury(event.target.value)}
               />
             </Field>
             <Field label="Native funding (ETH)" htmlFor="dao-funding">
@@ -328,6 +357,9 @@ export default function NewDaoPage() {
                 <div className="text-xs">
                   Set <span className="font-mono">NEXT_PUBLIC_DAO_CORE</span> to
                   this address to open it in the console.
+                </div>
+                <div className="text-xs">
+                  Transfer {treasury} USDC to this address to fund the treasury.
                 </div>
               </div>
             </Alert>
