@@ -18,6 +18,15 @@ const LOCAL_SOURCES = {
   "QuotaPayPreVerify.sol": "contracts/QuotaPayPreVerify.sol",
   "CompanyTypes.sol": "contracts/libraries/CompanyTypes.sol",
   "IStakingRegistry.sol": "contracts/interfaces/IStakingRegistry.sol",
+  "libraries/DaoTypes.sol": "contracts/libraries/DaoTypes.sol",
+  "interfaces/IDaoModules.sol": "contracts/interfaces/IDaoModules.sol",
+  "AgentAccount.sol": "contracts/AgentAccount.sol",
+  "AssetModule.sol": "contracts/AssetModule.sol",
+  "DaoCore.sol": "contracts/DaoCore.sol",
+  "DaoFactory.sol": "contracts/DaoFactory.sol",
+  "factories/DaoCoreFactory.sol": "contracts/factories/DaoCoreFactory.sol",
+  "factories/AgentAccountFactory.sol": "contracts/factories/AgentAccountFactory.sol",
+  "factories/AssetModuleFactory.sol": "contracts/factories/AssetModuleFactory.sol",
   "mocks.sol": "test/helpers/mocks.sol",
 };
 
@@ -108,6 +117,13 @@ export function compileAll() {
     "Groth16Verifier",
     "MockRegistry",
     "RevertingTreasury",
+    "DaoCore",
+    "DaoFactory",
+    "AgentAccount",
+    "AssetModule",
+    "DaoCoreFactory",
+    "AgentAccountFactory",
+    "AssetModuleFactory",
   ]) {
     if (!artifacts[need] || !artifacts[need].bytecode || artifacts[need].bytecode === "0x") {
       throw new Error(`missing bytecode for ${need}`);
