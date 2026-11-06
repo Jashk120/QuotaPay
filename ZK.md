@@ -275,7 +275,11 @@ permissionless by construction. Trace compliance of the current build:
 - writes: own slots only, inside the pre_verify frame (its purpose);
 - external calls: one `STATICCALL` to a deployed, non-delegated verifier whose
   trace reads no storage and — post-patch — uses no banned opcodes (`GAS`
-  forwarding replaced with fixed EIP-1108 costs);
+  forwarding replaced with fixed EIP-1108 costs). Caveat: the **paymaster** is
+  not GAS-free; its `txparam` helper calls and external verifier call still
+  compile to `GAS` (5 opcodes in `ZkPaymaster`, 6 in `DaoVotePaymaster`). A
+  ruleset that bans `GAS` anywhere in the prefix will reject the charge frame
+  until those helpers are rewritten;
 - one disclosed judgment call: a `BALANCE` read enforcing the withdrawal
   reserve, stricter than the protocol's own `APPROVE` solvency check. If a
   ruleset bans `BALANCE` even for staked payers, that line drops out and
@@ -355,7 +359,11 @@ grant cross-instance access.
   `charge()` must compute the bound from frame gas limits and `MAX_FEE`
   instead; otherwise the `maxSponsorCost` check is bypassed.
 - The verifier call is external, so the paymaster pays a cold `CALL` (~2.6k)
-  on top of the 249k verifier gas. This is included in the 330k frame budget.
+  on top of the verifier gas (~256k Membership, ~272k DAO). This is included
+  in the 330k frame budget.
+- The verifier is GAS-free after the patch, but both paymasters still emit
+  `GAS` in their own helper/external calls (see the trace caveat above). This
+  is the remaining gap for a strict validation ruleset.
 - `ZkPaymaster` is not audited. EIP-8141/ERC-8421 are drafts and the devnet
   differs from the EIP text.
 - The snarkjs-generated verifier carries `GPL-3.0`; check license compatibility
