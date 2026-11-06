@@ -41,6 +41,14 @@ devnet occasionally stalls), resume it instead of broadcasting a second one:
 $env:RESUME_FACTORY="0x<factory>"; npm run deploy
 ```
 
+If the factory tx is stuck and the devnet is stalled, replace it with a cheap
+21k-gas self-cancel before the miner restarts, then deploy fresh (do not reuse
+the cancelled factory address):
+
+```powershell
+npm run cancel:pending
+```
+
 Then run the real end-to-end sponsored transaction:
 
 ```powershell

@@ -11,6 +11,7 @@
     "codec": "node scripts/codec-check.mjs",
     "deploy": "node scripts/deploy.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "cancel:pending": "node scripts/cancel-pending.mjs",
     "test": "node --test \"test/*.test.mjs\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"

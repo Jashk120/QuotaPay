@@ -154,7 +154,13 @@ async function main() {
       bytecode: artifacts.CompanyFactory.bytecode,
       args: ["0x0000000000000000000000000000000000000000", REGISTRY],
     });
-    const factoryTx = await sendLegacy(account, { to: null, data: factoryData });
+    const factoryTx = await sendLegacy(account, {
+      to: null,
+      data: factoryData,
+      // Cap the deploy below the 30.9M limit that was pending when the devnet
+      // miner stalled. The previous successful deploy used ~24.6M.
+      gas: 28_000_000n,
+    });
     factory = factoryTx.receipt.contractAddress;
     if (!factory) throw new Error("factory deploy produced no address");
     console.log(`      factory: ${factory} (${factoryTx.hash})`);
