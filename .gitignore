@@ -11,6 +11,9 @@ next-env.d.ts
 # generated solidity artifacts
 build/
 
+# browser prover assets + demo credential (run npm run zk:publish)
+public/zk/
+
 # tool caches
 *.tsbuildinfo
 .artifacts-cache.json
