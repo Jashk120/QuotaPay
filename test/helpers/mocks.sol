@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+import {IERC20} from "interfaces/IDaoModules.sol";
+import {
+    BalanceDelta,
+    Currency,
+    IUnlockCallback,
+    PoolId,
+    PoolKey,
+    SwapParams
+} from "interfaces/IV4PoolManager.sol";
+
 /// Minimal staking-registry stand-in: records forwarded stake.
 contract MockRegistry {
     uint256 public totalStaked;
@@ -81,6 +91,13 @@ contract MockERC20 {
 /// `DaoCore` only compares `msg.sender` with `agentAccount`, so a tiny forwarder
 /// is enough to exercise the agent-only paths without impersonating a contract.
 contract MockAgent {
+    struct Rule {
+        bool allowed;
+        uint8 tier;
+    }
+
+    mapping(address => mapping(bytes4 => Rule)) public rules;
+
     function execute(address target, bytes calldata data)
         external
         payable
@@ -96,7 +113,11 @@ contract MockAgent {
     }
 
     // AgentAccount surface used by DaoCore.initializePolicy / governance calls.
-    function setRule(address, bytes4, bool, uint8) external {}
+    function setRule(address target, bytes4 selector, bool allowed, uint8 tier)
+        external
+    {
+        rules[target][selector] = Rule(allowed, tier);
+    }
 
     function setAgentSigner(address) external {}
 
@@ -139,3 +160,93 @@ contract MockVotePaymaster {
         voteChoice[dao][proposalId][nullifier] = support;
     }
 }
+
+/// Minimal v4 `PoolManager` stand-in for `DaoSwapModule` unit tests.
+///
+/// It reproduces the parts the module relies on: the unlock/callback cycle,
+/// a configured `BalanceDelta`, `sync`/`settle` crediting and `take` paying the
+/// recipient. It does not implement pricing or liquidity; the test sets the
+/// delta it wants the pool to return.
+contract MockPoolManager {
+    bool private locked;
+    BalanceDelta private nextDelta;
+
+    PoolId public lastPoolId;
+    bool public lastZeroForOne;
+    int256 public lastAmountSpecified;
+    uint256 public lastSqrtPriceLimitX96;
+    address public lastTaker;
+    address public lastTakeToken;
+    uint256 public lastTakeAmount;
+    uint256 public totalNativeSettled;
+    mapping(address => uint256) public tokenSettled;
+
+    address private syncedToken;
+    mapping(address => uint256) private syncedBalance;
+
+    receive() external payable {}
+
+    function setNextDelta(int128 amount0, int128 amount1) external {
+        nextDelta = BalanceDelta.wrap(
+            (int256(amount0) << 128) |
+                int256(uint256(uint128(uint256(int256(amount1)))))
+        );
+    }
+
+    function unlock(bytes calldata data) external returns (bytes memory) {
+        require(!locked, "locked");
+        locked = true;
+        bytes memory result = IUnlockCallback(msg.sender).unlockCallback(data);
+        locked = false;
+        return result;
+    }
+
+    function swap(
+        PoolKey calldata key,
+        SwapParams calldata params,
+        bytes calldata
+    ) external returns (BalanceDelta) {
+        require(locked, "not locked");
+        lastPoolId = PoolId.wrap(keccak256(abi.encode(key)));
+        lastZeroForOne = params.zeroForOne;
+        lastAmountSpecified = params.amountSpecified;
+        lastSqrtPriceLimitX96 = uint256(params.sqrtPriceLimitX96);
+        return nextDelta;
+    }
+
+    function sync(Currency currency) external {
+        require(locked, "not locked");
+        syncedToken = Currency.unwrap(currency);
+        syncedBalance[syncedToken] = IERC20(syncedToken).balanceOf(address(this));
+    }
+
+    function settle() external payable returns (uint256 paid) {
+        require(locked, "not locked");
+        paid = msg.value;
+        if (paid > 0) totalNativeSettled += paid;
+        if (syncedToken != address(0)) {
+            uint256 balance = IERC20(syncedToken).balanceOf(address(this));
+            uint256 diff = balance > syncedBalance[syncedToken]
+                ? balance - syncedBalance[syncedToken]
+                : 0;
+            tokenSettled[syncedToken] += diff;
+            paid += diff;
+            syncedToken = address(0);
+        }
+    }
+
+    function take(Currency currency, address to, uint256 amount) external {
+        require(locked, "not locked");
+        address token = Currency.unwrap(currency);
+        lastTaker = to;
+        lastTakeToken = token;
+        lastTakeAmount = amount;
+        if (token == address(0)) {
+            (bool ok, ) = to.call{value: amount}("");
+            require(ok, "take failed");
+        } else {
+            require(IERC20(token).transfer(to, amount), "take failed");
+        }
+    }
+}
+
