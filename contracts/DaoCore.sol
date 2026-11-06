@@ -197,7 +197,7 @@ contract DaoCore {
         _entered = false;
     }
 
-    constructor(DaoConfig memory cfg) {
+    constructor(DaoConfig memory cfg, address factory_) {
         require(cfg.daoId != bytes32(0), "daoId=0");
         require(cfg.admin != address(0), "admin=0");
         require(cfg.agentSigner != address(0), "signer=0");
@@ -207,7 +207,7 @@ contract DaoCore {
         require(cfg.quorumBps > 0 && cfg.quorumBps <= 10_000, "quorum");
 
         daoId = cfg.daoId;
-        factory = msg.sender;
+        factory = factory_ == address(0) ? msg.sender : factory_;
         admin = cfg.admin;
         memberPeriodLength = cfg.memberPeriodLength;
         addMemberLimit = cfg.addMemberLimit;
@@ -234,6 +234,18 @@ contract DaoCore {
         require(agentAccount_ != address(0), "agent=0");
         agentAccount = agentAccount_;
         proposalTargetAllowed[address(this)] = true;
+
+        // Default agent policy. The factory cannot know these addresses before
+        // deployment, so the DAO installs the rules for its own selectors.
+        IAgentAccount(agentAccount_).setRule(address(this), this.addMembers.selector, true, TIER_AGENT);
+        IAgentAccount(agentAccount_).setRule(address(this), this.spend.selector, true, TIER_AGENT);
+        IAgentAccount(agentAccount_).setRule(address(this), this.approveAsset.selector, true, TIER_AGENT);
+        IAgentAccount(agentAccount_).setRule(address(this), this.acquireAsset.selector, true, TIER_AGENT);
+        IAgentAccount(agentAccount_).setRule(address(this), this.createProposal.selector, true, TIER_AGENT);
+        IAgentAccount(agentAccount_).setRule(address(this), this.removeMember.selector, true, TIER_ADMIN);
+        IAgentAccount(agentAccount_).setRule(address(this), this.setRole.selector, true, TIER_ADMIN);
+        IAgentAccount(agentAccount_).setRule(address(this), this.disposeAsset.selector, true, TIER_ADMIN);
+
         emit AgentInitialized(agentAccount_);
     }
 

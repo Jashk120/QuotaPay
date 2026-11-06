@@ -105,8 +105,8 @@ contract DaoFactory {
             )
         );
 
-        DaoCore(core).initializeAgent(account);
         AgentAccount(account).initializeDao(core);
+        DaoCore(core).initializeAgent(account);
         DaoCore(core).initializePolicy(rules);
         DaoCore(core).initializeAssetModule(module);
         DaoCore(core).initializeAssets(assets);

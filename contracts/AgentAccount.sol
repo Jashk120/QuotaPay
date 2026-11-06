@@ -65,10 +65,15 @@ contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
         _;
     }
 
-    constructor(address admin_, address agentSigner_, bool frameEnforced_) {
+    constructor(
+        address admin_,
+        address agentSigner_,
+        bool frameEnforced_,
+        address factory_
+    ) {
         require(admin_ != address(0), "admin=0");
         require(agentSigner_ != address(0), "signer=0");
-        factory = msg.sender;
+        factory = factory_ == address(0) ? msg.sender : factory_;
         admin = admin_;
         agentSigner = agentSigner_;
         frameEnforced = frameEnforced_;

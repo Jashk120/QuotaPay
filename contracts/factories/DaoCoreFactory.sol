@@ -13,7 +13,7 @@ contract DaoCoreFactory {
     event DaoCoreDeployed(address indexed daoCore);
 
     function deploy(DaoConfig calldata cfg) external returns (address) {
-        DaoCore core = new DaoCore(cfg);
+        DaoCore core = new DaoCore(cfg, msg.sender);
         emit DaoCoreDeployed(address(core));
         return address(core);
     }

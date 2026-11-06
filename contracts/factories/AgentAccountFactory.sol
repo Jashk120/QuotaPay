@@ -13,7 +13,12 @@ contract AgentAccountFactory {
         address agentSigner,
         bool frameEnforced
     ) external returns (address) {
-        AgentAccount account = new AgentAccount(admin, agentSigner, frameEnforced);
+        AgentAccount account = new AgentAccount(
+            admin,
+            agentSigner,
+            frameEnforced,
+            msg.sender
+        );
         emit AgentAccountDeployed(address(account));
         return address(account);
     }
