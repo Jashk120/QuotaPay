@@ -147,12 +147,26 @@ async function main() {
   const coreFactory = await deploy(account, artifacts, "DaoCoreFactory");
   const accountFactory = await deploy(account, artifacts, "AgentAccountFactory");
   const moduleFactory = await deploy(account, artifacts, "AssetModuleFactory");
+  // The v4 swap module is optional until a PoolManager exists on the target
+  // chain: set POOL_MANAGER (and/or DAO_SWAP_MODULE_FACTORY) to wire it.
+  let swapModuleFactory =
+    process.env.DAO_SWAP_MODULE_FACTORY ?? addressZero;
+  const poolManager = process.env.POOL_MANAGER ?? addressZero;
+  if (swapModuleFactory === addressZero && poolManager !== addressZero) {
+    swapModuleFactory = await deploy(
+      account,
+      artifacts,
+      "DaoSwapModuleFactory",
+      [poolManager]
+    );
+  }
 
   console.log("[2/7] orchestrator");
   const factory = await deploy(account, artifacts, "DaoFactory", [
     coreFactory,
     accountFactory,
     moduleFactory,
+    swapModuleFactory,
   ]);
 
   console.log("[3/7] demo treasury token");
@@ -307,6 +321,7 @@ async function main() {
     coreFactory,
     accountFactory,
     moduleFactory,
+    swapModuleFactory,
     usdc,
     assetId,
     fundWei: FUND_WEI.toString(),

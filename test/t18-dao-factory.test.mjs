@@ -36,6 +36,7 @@ test("T18 DaoFactory: deploy, wire and isolate DAOs", async (t) => {
     coreFactoryAddr,
     accountFactoryAddr,
     moduleFactoryAddr,
+    ethers.ZeroAddress,
   ]);
 
   const token = await deploy(artifacts, "MockERC20", deployer, ["USDC", "USDC"]);
@@ -198,6 +199,7 @@ test("T18 DaoFactory: deploy, wire and isolate DAOs", async (t) => {
         ethers.ZeroAddress,
         accountFactoryAddr,
         moduleFactoryAddr,
+        ethers.ZeroAddress,
       ]),
     ]);
     await expectRevert(() => chain.provider.call({ data }), "coreFactory=0");

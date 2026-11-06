@@ -5,6 +5,7 @@ import {AssetConfig, DaoConfig, PolicyRule, TokenCapConfig} from "./libraries/Da
 import {DaoCore} from "./DaoCore.sol";
 import {AgentAccount} from "./AgentAccount.sol";
 import {AssetModule} from "./AssetModule.sol";
+import {IDaoSwapModule} from "./interfaces/IDaoSwapModule.sol";
 
 interface IDaoCoreFactory {
     function deploy(DaoConfig calldata cfg) external returns (address);
@@ -18,6 +19,10 @@ interface IAgentAccountFactory {
 
 interface IAssetModuleFactory {
     function deploy(address dao) external returns (address);
+}
+
+interface IDaoSwapModuleFactory {
+    function deploy(address dao, address agentAccount) external returns (address);
 }
 
 /// Deploys one DAO and its agent account in a single transaction (spec §8.1).
@@ -38,6 +43,9 @@ contract DaoFactory {
     address public immutable coreFactory;
     address public immutable accountFactory;
     address public immutable moduleFactory;
+    /// Optional: set once v4 is deployed. When zero, DAOs are created without a
+    /// swap module and `DaoCore.swapAboveCap` stays closed.
+    address public immutable swapModuleFactory;
 
     mapping(bytes32 => DaoRecord) public daos;
     mapping(address => bytes32) public daoIdOf;
@@ -62,7 +70,8 @@ contract DaoFactory {
     constructor(
         address coreFactory_,
         address accountFactory_,
-        address moduleFactory_
+        address moduleFactory_,
+        address swapModuleFactory_
     ) {
         require(coreFactory_ != address(0), "coreFactory=0");
         require(accountFactory_ != address(0), "accountFactory=0");
@@ -70,6 +79,7 @@ contract DaoFactory {
         coreFactory = coreFactory_;
         accountFactory = accountFactory_;
         moduleFactory = moduleFactory_;
+        swapModuleFactory = swapModuleFactory_;
     }
 
     function createDao(
@@ -115,7 +125,25 @@ contract DaoFactory {
 
         AgentAccount(account).initializeDao(core);
         DaoCore(core).initializeAgent(account);
+        address swapModule = address(0);
+        if (swapModuleFactory != address(0)) {
+            swapModule = IDaoSwapModuleFactory(swapModuleFactory).deploy(
+                core,
+                account
+            );
+            DaoCore(core).initializeSwapModule(swapModule);
+        }
         DaoCore(core).initializePolicy(rules);
+        if (swapModule != address(0)) {
+            PolicyRule[] memory swapRule = new PolicyRule[](1);
+            swapRule[0] = PolicyRule(
+                swapModule,
+                IDaoSwapModule.swap.selector,
+                true,
+                1
+            );
+            DaoCore(core).initializePolicy(swapRule);
+        }
         DaoCore(core).initializeAssetModule(module);
         DaoCore(core).initializeAssets(assets);
         DaoCore(core).configureTokenCaps(tokenCaps);

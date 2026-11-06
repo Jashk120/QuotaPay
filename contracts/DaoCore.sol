@@ -14,6 +14,7 @@ import {
     IDaoVotePaymaster,
     IERC20
 } from "./interfaces/IDaoModules.sol";
+import {IDaoSwapModule} from "./interfaces/IDaoSwapModule.sol";
 
 /// The DAO: member commitments, roles, proposals, treasury, caps and audit.
 ///
@@ -67,6 +68,7 @@ contract DaoCore {
     uint8 public constant ACTION_SPEND = 5;
     uint8 public constant ACTION_EXECUTE_PROPOSAL = 6;
     uint8 public constant ACTION_ACQUIRE_ASSET = 7;
+    uint8 public constant ACTION_SWAP = 8;
 
     uint8 public constant ROLE_MEMBER = 0;
     uint8 public constant ROLE_CONTRIBUTOR = 1;
@@ -90,6 +92,7 @@ contract DaoCore {
     address public agentAccount;
     address public assetModule;
     address public votePaymaster;
+    address public swapModule;
 
     bytes32 public membershipRoot;
     bytes32 public journalRoot;
@@ -121,6 +124,7 @@ contract DaoCore {
     event AgentInitialized(address indexed agentAccount);
     event AssetModuleInitialized(address indexed assetModule);
     event VotePaymasterSet(address indexed paymaster);
+    event SwapModuleInitialized(address indexed swapModule);
     event AdminSet(address indexed previous, address indexed next);
     event MembershipRootUpdated(
         bytes32 indexed oldRoot,
@@ -260,6 +264,17 @@ contract DaoCore {
         assetSelectorAllowed[IAssetModule.allowAsset.selector] = true;
         assetSelectorAllowed[IAssetModule.setAssetCap.selector] = true;
         emit AssetModuleInitialized(assetModule_);
+    }
+
+    /// Wire the per-DAO v4 swap module. The factory calls this once; the module
+    /// cannot be rotated afterwards (UNISWAP-V4.md §5.5). The agent rule for
+    /// `module.swap` is installed by the factory's policy table.
+    function initializeSwapModule(address module) external onlyFactory {
+        swapModule = module;
+        proposalTargetAllowed[module] = true;
+        assetSelectorAllowed[IDaoSwapModule.swapAboveCap.selector] = true;
+        assetSelectorAllowed[IDaoSwapModule.setPool.selector] = true;
+        emit SwapModuleInitialized(module);
     }
 
     /// Apply the deployment policy table to `AgentAccount`. The factory calls
@@ -573,6 +588,30 @@ contract DaoCore {
             TIER_ADMIN,
             admin,
             ACTION_DISPOSE_ASSET,
+            bytes32(0),
+            bytes32(0)
+        );
+    }
+
+    /// Tier 3: move the swap input from the treasury into the module. The
+    /// module calls this from its governance-only `swapAboveCap` entry point.
+    function pullForSwap(address token, uint256 amount) external {
+        require(msg.sender == swapModule, "not swap module");
+        _transfer(token, swapModule, amount);
+    }
+
+    /// Tier 3: audit a swap the module executed for the treasury. The module
+    /// emits its own `Swapped` event; this keeps the existing DaoCore audit
+    /// shape (`ACTION_SWAP = 8`) instead of inventing a second one.
+    function recordSwap(bytes32 poolId, uint256 amountIn, uint256 amountOut)
+        external
+    {
+        require(msg.sender == swapModule, "not swap module");
+        emit ActionExecuted(
+            keccak256(abi.encode(ACTION_SWAP, poolId, amountIn, amountOut)),
+            TIER_GOVERNANCE,
+            address(this),
+            ACTION_SWAP,
             bytes32(0),
             bytes32(0)
         );
