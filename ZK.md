@@ -45,6 +45,7 @@ so without it a proof could be replayed under a different `tx.sender`.
 | `scripts/deploy-zk.mjs` | Deploy verifier + paymaster, build demo root, stake, fund |
 | `scripts/zk-sponsor.mjs` | Prove + build/sign/submit the sponsored frame tx |
 | `scripts/zk-publish.mjs` | Copy wasm/zkey to `public/zk`, write the demo credential |
+| `scripts/zk-admin.mjs` | Add/remove leaf commitments, emit paths, update root/epoch |
 | `lib/zk/client.ts` | Browser witness/nullifier/prover helpers (`poseidon-lite` + `snarkjs`) |
 | `app/zk/page.tsx` | Parallel `/zk` payment page (blind-token `/pay` untouched) |
 | `components/zk-credential-form.tsx` | Paste/load credential JSON, show bound nullifiers |
@@ -121,6 +122,42 @@ prove. The CLI equivalent is `npm run zk:sponsor`.
 Browser check: `npx playwright test e2e/zk.spec.ts` loads the fixture
 credential, generates the proof in Chromium, and builds the 4-frame tx. It
 skips unless `npm run zk:publish` has been run.
+
+## Authorized-set admin
+
+`deployments/zk-leaves.json` is the canonical, public list of leaf
+commitments. It contains no secrets:
+
+```json
+{ "chainId": 1337, "paymaster": "0x…", "epoch": "0", "leaves": ["…"] }
+```
+
+The employee generates `secret` and sends only
+`leaf = Poseidon(secret, paymaster, chainId)` to the admin. The admin runs:
+
+```powershell
+npm run zk:admin -- show
+npm run zk:admin -- add <leaf>              # offline; writes the file
+npm run zk:admin -- add <leaf> --onchain    # also calls setRoot(root)
+npm run zk:admin -- remove --index 2        # zeroes the slot, keeps indices
+npm run zk:admin -- remove --index 2 --onchain
+npm run zk:admin -- paths                   # public Merkle paths per leaf
+npm run zk:admin -- epoch 1
+npm run zk:admin -- deposit 0.05
+npm run zk:admin -- stake 0.012 86400
+```
+
+`paths` prints:
+
+```json
+[{ "index": 0, "leaf": "…", "root": "…", "pathElements": ["…"], "pathIndices": [0] }]
+```
+
+Send that path to the employee; they combine it with their own secret in the
+`/zk` credential form. Removal sets the slot to `0` instead of splicing, so
+other employees' indices and paths stay stable until the next root update.
+Changing the root invalidates every outstanding path; redistribute after each
+`add`/`remove`.
 
 ## Nullifier model
 
