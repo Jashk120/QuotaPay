@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { KeyRound, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ShieldCheck } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { ZkCredentialForm } from "@/components/zk-credential-form";
 import { ZkPaymentPanel } from "@/components/zk-payment-panel";
+import { SessionWalletCard } from "@/components/session-wallet-card";
 import { config } from "@/lib/config";
 import { useAnonRpc } from "@/lib/anonRpc";
 import {
@@ -21,6 +22,13 @@ import {
 } from "@/lib/zk/credentialStore";
 import type { ZkCredential } from "@/lib/zk/client";
 import { useSessionKey } from "@/lib/wallet";
+import { cn } from "@/lib/utils";
+
+const flowSteps = [
+  { n: "1", label: "Load credential" },
+  { n: "2", label: "Prove" },
+  { n: "3", label: "Submit" },
+];
 
 export default function PayPage() {
   const { session, reset } = useSessionKey();
@@ -41,15 +49,44 @@ export default function PayPage() {
       <div className="space-y-2">
         <Badge variant="outline">Beneficiary · sponsored payment</Badge>
         <h1 className="text-3xl font-semibold tracking-tight">
-          Prove eligibility, not identity
+          Pay with 0 ETH — prove you&apos;re eligible
         </h1>
         <p className="max-w-3xl text-sm text-muted-foreground">
-          This builds a four-frame EIP-8141 transaction with a Groth16
-          membership proof, signs it with a local session key, and submits it
-          to the EIP-8141 RPC. The beneficiary holds 0 ETH; the company
-          paymaster pays. The paymaster learns a rotating session key and a
-          nullifier — never which employee is paying.
+          Load the credential your company gave you, generate a private proof in
+          this tab, then submit one sponsored transaction. The company paymaster
+          covers the gas; you hold 0 ETH the whole way.
         </p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {flowSteps.map((step, index) => {
+          const done = index === 0 && credential !== null;
+          return (
+            <div key={step.n} className="flex flex-1 items-center gap-2">
+              <div
+                className={cn(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                  done
+                    ? "border-primary/40 bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground",
+                )}
+              >
+                {done ? <CheckCircle2 className="h-4 w-4" /> : step.n}
+              </div>
+              <span
+                className={cn(
+                  "hidden text-xs sm:block",
+                  done ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {step.label}
+              </span>
+              {index < flowSteps.length - 1 ? (
+                <div className="h-px flex-1 bg-border/70" />
+              ) : null}
+            </div>
+          );
+        })}
       </div>
 
       {!config.zkPaymaster ? (
@@ -61,16 +98,13 @@ export default function PayPage() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <InfoCard
-          icon={<KeyRound className="h-4 w-4 text-primary" />}
-          title="Session key"
-          body={session?.address ?? "generating…"}
-        />
+      <SessionWalletCard session={session} onReset={reset} />
+
+      <div className="grid gap-3 md:grid-cols-2">
         <InfoCard
           icon={<ShieldCheck className="h-4 w-4 text-primary" />}
           title="Proof system"
-          body="Groth16 / BN254, 7 public inputs, ~256k verifier gas"
+          body="Groth16 / BN254 · verifies on-chain"
         />
         <InfoCard
           icon={<ShieldCheck className="h-4 w-4 text-primary" />}
@@ -97,46 +131,45 @@ export default function PayPage() {
         onResetSession={reset}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Setup</CardTitle>
-          <CardDescription>
-            The proof assets are generated locally and are gitignored.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            <span className="font-mono text-foreground">npm run zk:setup</span>{" "}
-            compiles the circuit, builds the devnet zkey, and exports the
-            verifier.
-          </p>
-          <p>
-            <span className="font-mono text-foreground">npm run zk:deploy</span>{" "}
-            deploys the verifier + paymaster, sets the root, and stakes.
-          </p>
-          <p>
-            <span className="font-mono text-foreground">npm run zk:publish</span>{" "}
-            copies the wasm/zkey to <span className="font-mono">public/zk</span>{" "}
-            and writes the demo credential.
-          </p>
-          <p>
-            The CLI equivalent is{" "}
-            <span className="font-mono text-foreground">npm run zk:sponsor</span>.
-          </p>
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>Session rotation:</span>
-        <button
-          type="button"
-          onClick={reset}
-          className="rounded-md border border-border/60 px-2 py-1 text-foreground transition-colors hover:bg-accent"
-        >
-          generate a new session key
-        </button>
-        <span>(the old credential will no longer match the new sender)</span>
-      </div>
+      <details className="group">
+        <summary className="cursor-pointer list-none text-sm text-muted-foreground transition-colors [&::-webkit-details-marker]:hidden hover:text-foreground">
+          Setup &amp; deploy commands (admins)
+        </summary>
+        <Card className="mt-3">
+          <CardHeader>
+            <CardTitle>Setup</CardTitle>
+            <CardDescription>
+              The proof assets are generated locally and are gitignored.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              <span className="font-mono text-foreground">
+                npm run zk:setup
+              </span>{" "}
+              compiles the circuit, builds the devnet zkey, and exports the
+              verifier.
+            </p>
+            <p>
+              <span className="font-mono text-foreground">
+                npm run zk:deploy
+              </span>{" "}
+              deploys the verifier + paymaster, sets the root, and stakes.
+            </p>
+            <p>
+              <span className="font-mono text-foreground">
+                npm run zk:publish
+              </span>{" "}
+              copies the wasm/zkey to <span className="font-mono">public/zk</span>{" "}
+              and writes the demo credential.
+            </p>
+            <p>
+              The CLI equivalent is{" "}
+              <span className="font-mono text-foreground">npm run zk:sponsor</span>.
+            </p>
+          </CardContent>
+        </Card>
+      </details>
     </div>
   );
 }
