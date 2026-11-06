@@ -124,7 +124,9 @@ A frame tx is atomic, so a failed `castVote` rolls the paymaster burn back.
   sender and the signature signer, and the proof's session binding.
 
 `encodeDaoVoteCharge` and `encodeDaoCastVote` build the two calldata payloads.
-`signFrameTx` and `serializeFrameTx` wrap the existing devnet codec.
+`signFrameTx` and `serializeFrameTx` wrap the existing devnet codec. The full
+contract ABI surface (DAO, AgentAccount, AssetModule, factory, both paymasters)
+is in `lib/daoAbis.mjs`.
 
 ## Commands
 
