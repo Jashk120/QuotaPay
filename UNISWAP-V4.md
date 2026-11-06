@@ -1,8 +1,10 @@
 # Uniswap v4 treasury swaps: design and devnet runbook
 
-Status: design + runbook. Nothing in this document is implemented or audited.
-`DAO.md` remains the source of truth for the existing DAO contracts; this file is
-the plan for adding v4.
+Status: design + runbook. The Phase 0 probe, `DaoSwapModule`, its factory, and
+the `DaoCore`/`DaoFactory` wiring are implemented and covered by `t24` on
+ganache. The devnet deployment phases (v4 build, pool seeding, frame swap) are
+not implemented yet. `DAO.md` remains the source of truth for the existing DAO
+contracts; this file is the plan for adding v4.
 
 Target chain: the EIP-8141 / ethrex devnet (chain id 1337), with v4 deployed
 from source. The Uniswap API is out of scope there: chain 1337 is not in its
@@ -18,7 +20,7 @@ it anyway.
 | Swap path | Direct `PoolManager.unlock` through a new `DaoSwapModule`. Universal Router is optional and stays on the UI side. |
 | Where the swap logic lives | `DaoSwapModule` (new contract), not `DaoCore`. `DaoCore` gets at most one small above-cap entry point. |
 | Tier 1 (within cap) | `DaoCore.spend(tokenIn, module, amountIn)` + `module.swap(...)` in one atomic frame batch. |
-| Tier 3 (above cap) | Proposal -> `DaoCore.swapAboveCap(...)` (self-call), which forwards the input and calls the module. |
+| Tier 3 (above cap) | Proposal -> `DaoSwapModule.swapAboveCap(...)`, which pulls the input through `DaoCore.pullForSwap` and records `ACTION_SWAP` through `DaoCore.recordSwap`. |
 | Caps | Reuse the per-token `tokenCaps` accounting. The tier-1 cap is denominated in the input token (USDC), so no oracle is needed on that path. |
 | Pool selection | Pools are allowlisted by `PoolId`; the agent never supplies an arbitrary `PoolKey`. |
 | Exact-in / exact-out | Exact-in at tier 1. Exact-out at tier 3 only; the input amount is unknown before execution. |
@@ -59,13 +61,13 @@ pass `TickMath.MIN_SQRT_PRICE + 1` for `zeroForOne` and
 
 ## 3. Size budget
 
-Measured from the local artifact cache on 2026-11-06 (and from mainnet
-`eth_getCode` for the Uniswap contracts):
+Measured from the local artifact cache on 2026-11-06. The `DaoCore` rows are
+the post-slice numbers; the v4 rows are the canonical builds:
 
 | Contract | Runtime | EIP-170 limit | Headroom |
 |---|---:|---:|---:|
-| `DaoCore` | 21,443 | 24,576 | 3,133 |
-| `DaoCoreFactory` | 23,645 | 24,576 | **931** |
+| `DaoCore` | 22,294 | 24,576 | 2,282 |
+| `DaoCoreFactory` | 24,503 | 24,576 | **73** |
 | v4 `PoolManager` | 24,009 | 24,576 | **567** |
 | v4 `PositionManager` | 23,877 | 24,576 | 699 |
 | Universal Router 2.1.2 | 24,380 | 24,576 | **196** |
@@ -74,16 +76,15 @@ Measured from the local artifact cache on 2026-11-06 (and from mainnet
 
 The binding constraint is `DaoCoreFactory`, not `DaoCore`: the factory stores
 the `DaoCore` creation code, so every byte added to `DaoCore` is a byte added to
-the factory. The swap module must **not** be deployed by `DaoCoreFactory`; it
-can go through a fourth child factory (matching the existing pattern) or
-directly through `DaoFactory`, which is only 3,343 bytes and has room. A child
-factory keeps the orchestrator small and keeps the deployment shape uniform.
+the factory. The first slice used 1,082 bytes (the original design predicted
+931), leaving 73 bytes. Treat that as zero: any further `DaoCore` change needs a
+size reduction first. The swap module is **not** deployed by `DaoCoreFactory`;
+it goes through `DaoSwapModuleFactory`, a fourth child factory.
 
-If `DaoCore` cannot stay under the limit, the fallback is to drop
-`swapAboveCap` and let the module be the proposal target; the module then needs
-a way to pull from the treasury, which means a governance-only approval
-function. That is a larger change than it sounds, so budget the 931 bytes
-carefully.
+The design already uses the fallback below: `DaoCore` keeps `pullForSwap` and
+`recordSwap` (both module-only) instead of a large `swapAboveCap` wrapper, which
+is what made the 73-byte result possible. Moving either check back into
+`DaoCore` would exceed EIP-170.
 
 ---
 
@@ -102,10 +103,11 @@ DaoSwapModule ── unlock(callback) ──> PoolManager
    └──────── take(output, dao) ────────┘
 
 Governance path:
-DaoCore.executeProposal -> DaoCore.swapAboveCap(req)
-   -> transfer input to module
+DaoCore.executeProposal -> DaoSwapModule.swapAboveCap(req)
+   -> DaoCore.pullForSwap(input, amountIn) -> module
    -> module.swap(req) -> PoolManager
-   -> output to DaoCore
+   -> output to DaoCore (module.take)
+   -> DaoCore.recordSwap(poolId, amountIn, amountOut)  [ACTION_SWAP]
 ```
 
 ### 4.1 Contracts
@@ -113,8 +115,8 @@ DaoCore.executeProposal -> DaoCore.swapAboveCap(req)
 | Contract | Owner | Responsibility |
 |---|---|---|
 | `DaoSwapModule` | one per DAO | Holds the v4 wiring, implements `IUnlockCallback`, enforces the pool allowlist, `deadline`, `minAmountOut`, and the caller check. Holds input tokens only for the duration of one atomic batch. |
-| `DaoSwapModuleFactory` | chain (optional) | Deploys a module for a DAO with `(poolManager, dao, agentAccount)`. A child factory matches the existing pattern; `DaoFactory` could also deploy it directly. |
-| `DaoCore` (delta) | per DAO | `swapModule` address, `initializeSwapModule`, `swapAboveCap`, the `ACTION_SWAP` audit constant, and the module policy rule. |
+| `DaoSwapModuleFactory` | chain (optional) | Deploys a module for a DAO with `(poolManager, dao, agentAccount)`. `DaoFactory` takes it as an optional fourth child factory; zero means no swap module on that chain. |
+| `DaoCore` (delta) | per DAO | `swapModule` address, `initializeSwapModule`, `pullForSwap`, `recordSwap`, the `ACTION_SWAP` audit constant, and the module target/selector allowlist. The agent policy rule is installed by `DaoFactory` through `initializePolicy`. |
 | `AgentAccount` | per DAO | Policy rule: `module.swap` is tier 1, so the frame-introspection check admits it. |
 | `PoolManager` | chain | v4 singleton. Owns all pool state and flash accounting. |
 | `StateView` | chain | Read-only `getSlot0` / `getLiquidity` for the UI and scripts. |
@@ -157,10 +159,18 @@ interface IDaoSwapModule {
     }
 
     function swap(SwapRequest calldata req) external returns (uint256 amountOut);
+    function swapAboveCap(SwapRequest calldata req)
+        external
+        returns (uint256 amountOut);
     function setPool(PoolKey calldata key, bool allowed) external;
     function poolAllowed(PoolId id) external view returns (bool);
 }
 ```
+
+`swap` is tier 1 (the DAO or its agent calls it after `DaoCore.spend`).
+`swapAboveCap` is `msg.sender == dao` only and is the proposal target; it pulls
+the input through `DaoCore.pullForSwap` and records the result through
+`DaoCore.recordSwap`.
 
 ### 5.2 Checks
 
@@ -175,8 +185,9 @@ interface IDaoSwapModule {
 6. After the swap, `amountOut >= minAmountOut`.
 
 `setPool` is `msg.sender == dao` only. Governance reaches it through a proposal
-that targets the module; `DaoCore.createProposal` must allow the module target
-and the `setPool` selector.
+that targets the module; `DaoCore.initializeSwapModule` allows the module target
+and both the `setPool` and `swapAboveCap` selectors. `setPool` also rejects
+unsorted keys and identical currencies before computing the `PoolId`.
 
 ### 5.3 Flow inside `unlockCallback`
 
@@ -254,41 +265,33 @@ shape.
 
 ### 5.5 DaoCore delta
 
-Minimum viable change:
+Minimum viable change (this is the implemented shape; the original
+`swapAboveCap` wrapper did not fit the size budget):
 
 ```solidity
 address public swapModule;
 
+// Called once by DaoFactory, after the agent account exists.
 function initializeSwapModule(address module) external onlyFactory {
-    require(swapModule == address(0), "swap set");
-    require(module != address(0), "module=0");
-    require(agentAccount != address(0), "no agent");
     swapModule = module;
     proposalTargetAllowed[module] = true;
+    assetSelectorAllowed[IDaoSwapModule.swapAboveCap.selector] = true;
     assetSelectorAllowed[IDaoSwapModule.setPool.selector] = true;
-    IAgentAccount(agentAccount).setRule(
-        module,
-        IDaoSwapModule.swap.selector,
-        true,
-        TIER_AGENT
-    );
     emit SwapModuleInitialized(module);
 }
 
-// No nonReentrant: executeProposal already holds the guard.
-function swapAboveCap(IDaoSwapModule.SwapRequest calldata req)
+// Called by the module inside swapAboveCap, which a proposal targets.
+function pullForSwap(address token, uint256 amount) external {
+    require(msg.sender == swapModule, "not swap module");
+    _transfer(token, swapModule, amount);
+}
+
+function recordSwap(bytes32 poolId, uint256 amountIn, uint256 amountOut)
     external
-    onlyGovernance
 {
-    require(swapModule != address(0), "no swap module");
-    address tokenIn = Currency.unwrap(
-        req.zeroForOne ? req.key.currency0 : req.key.currency1
-    );
-    _transfer(tokenIn, swapModule, req.amountIn);
-    uint256 amountOut = IDaoSwapModule(swapModule).swap(req);
+    require(msg.sender == swapModule, "not swap module");
     emit ActionExecuted(
-        // `PoolKey.toId()` comes from PoolIdLibrary's global using-for.
-        keccak256(abi.encode(ACTION_SWAP, req.key.toId(), req.amountIn, amountOut)),
+        keccak256(abi.encode(ACTION_SWAP, poolId, amountIn, amountOut)),
         TIER_GOVERNANCE,
         address(this),
         ACTION_SWAP,
@@ -298,20 +301,22 @@ function swapAboveCap(IDaoSwapModule.SwapRequest calldata req)
 }
 ```
 
-Add `governanceSelector[this.swapAboveCap.selector] = true` in the constructor.
-Note that `acquireAssetAboveCap` has the same "no `nonReentrant`" comment for the
-same reason.
+`DaoFactory` installs the tier-1 agent rule (`module.swap`) through the existing
+`initializePolicy` path, so `DaoCore.initializeSwapModule` stays small. The
+module's `swapAboveCap` is `onlyDao`; when `executeProposal` self-calls the
+module, `msg.sender` is the DAO.
 
-If the factory size check fails, remove `swapAboveCap` and let a proposal target
-the module directly. The module then needs a governance-only way to pull the
-input from the treasury; that is the fallback, not the first choice.
+The size budget is the reason for this shape: `DaoCoreFactory` is 24,503 bytes
+and cannot fit the original `swapAboveCap` wrapper (which cost ~950 bytes on its
+own). Do not add `nonReentrant` to `pullForSwap` or `recordSwap`:
+`executeProposal` already holds the guard.
 
 ### 5.6 Tier and cap mapping
 
 | Action | Tier | Path |
 |---|---|---|
 | Swap within the input-token cap, allowlisted pool | 1 | `spend` + `module.swap` (atomic batch) |
-| Swap above the cap | 3 | proposal -> `DaoCore.swapAboveCap` -> module |
+| Swap above the cap | 3 | proposal -> `module.swapAboveCap` -> `DaoCore.pullForSwap` / `recordSwap` |
 | Allowlist/remove a pool | 3 | proposal -> `module.setPool` |
 | Rotate the module | 3 | not supported in this design; redeploy if needed |
 | Pause the agent | admin | `DaoCore.pauseAgent` |
@@ -432,7 +437,8 @@ Probe the same way the repo already probes `FRAMEDATACOPY`:
 | Block gas limit | A swap + settle + take must fit with the frame overhead. |
 | Frame-tx support | The DAO path is a frame tx; test one plain swap and one swap inside a SENDER frame. |
 
-Add `contracts/probe/TransientProbe.sol` next to `FrameReadProbe.sol`:
+Add `contracts/probe/TransientProbe.sol` next to `FrameReadProbe.sol`
+(implemented):
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -449,11 +455,11 @@ contract TransientProbe {
 ```
 
 The existing `compileAll()` helper hard-codes `evmVersion: "shanghai"` and
-optimizer runs 200, so it will reject `tstore`. Add a one-off probe compile
-(either a second settings block in `test/helpers/compile.mjs` or a small
-standalone script) with `evmVersion: "cancun"`, deploy it, and `eth_call`
-`roundTrip(0x1234)`. Any revert or empty return means the chain is not ready;
-stop. Do not change the DAO contracts' shanghai setting for this.
+optimizer runs 200, so it will reject `tstore`. `scripts/v4-probe.mjs` (added
+with this design) does the one-off cancun compile of the probe, deploys it, and
+`eth_call`s both `roundTrip` (`TSTORE`/`TLOAD`) and `copy` (`MCOPY`). Any revert
+or empty return means the chain is not ready; stop. Do not change the DAO
+contracts' shanghai setting for this.
 
 **Gate:** all six checks pass, and the probe result is recorded in the runbook
 output (chain id, gas limit, code-size result, frame result).
@@ -575,8 +581,8 @@ Then force the swap to fail (bad `minAmountOut`) and confirm the preceding
 
 ### Phase 6 - above-cap proposal (tier 3)
 
-1. Create a proposal targeting `DaoCore.swapAboveCap` with a request above the
-   per-tx cap.
+1. Create a proposal targeting `DaoSwapModule.swapAboveCap` with a request
+   above the per-tx cap.
 2. Vote and execute after the deadline.
 3. Confirm the input moved from the treasury to the module and the output came
    back to the treasury, with no cap debit (the above-cap path bypasses the cap,
@@ -691,7 +697,7 @@ for the treasury path.
 ## Appendix B - commands
 
 ```powershell
-# probe (script to add next to scripts/frame-read-probe.mjs)
+# probe: chain id, gas limit, TSTORE/TLOAD and MCOPY (scripts/v4-probe.mjs)
 node scripts/v4-probe.mjs --rpc $env:DEVNET_RPC
 
 # build the pinned v4 sources with the v4-core settings
