@@ -243,6 +243,7 @@ contract DaoCore {
         IAgentAccount(agentAccount_).setRule(address(this), this.approveAsset.selector, true, TIER_AGENT);
         IAgentAccount(agentAccount_).setRule(address(this), this.acquireAsset.selector, true, TIER_AGENT);
         IAgentAccount(agentAccount_).setRule(address(this), this.createProposal.selector, true, TIER_AGENT);
+        IAgentAccount(agentAccount_).setRule(address(this), this.executeProposal.selector, true, TIER_AGENT);
         IAgentAccount(agentAccount_).setRule(address(this), this.removeMember.selector, true, TIER_ADMIN);
         IAgentAccount(agentAccount_).setRule(address(this), this.setRole.selector, true, TIER_ADMIN);
         IAgentAccount(agentAccount_).setRule(address(this), this.disposeAsset.selector, true, TIER_ADMIN);

@@ -28,6 +28,7 @@ separately.
 | Remove a member | 2 | `DaoCore.removeMember` + `AdminAuth` |
 | Change a role | 2 | `DaoCore.setRole` + `AdminAuth` |
 | Dispose of an asset | 2 | `DaoCore.disposeAsset` + `AdminAuth` |
+| Execute a passed proposal | 1 | `DaoCore.executeProposal` after the deadline (agent policy allows it; anyone may submit) |
 | Spend/acquire above caps, allowlist, caps, policy, agent key, admin, vote paymaster | 3 | proposal -> `DaoCore.executeProposal` |
 | Emergency pause / revoke | admin | `AgentAccount.pause`, `DaoCore.pauseAgent` |
 
