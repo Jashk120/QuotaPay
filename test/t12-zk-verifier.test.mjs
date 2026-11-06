@@ -51,22 +51,42 @@ test("T12 Groth16 membership verifier", async (t) => {
     assert.equal(await verify(verifier, p), true, "fixture proof must verify");
   });
 
-  await t.test("tampered nullifier is rejected", async () => {
-    const bad = { ...p, input: [...p.input] };
-    bad.input[5] = bad.input[5] + 1n;
-    assert.equal(await verify(verifier, bad), false, "changed nullifier must fail");
-  });
-
-  await t.test("tampered session key is rejected", async () => {
-    const bad = { ...p, input: [...p.input] };
-    bad.input[4] = bad.input[4] + 1n;
-    assert.equal(await verify(verifier, bad), false, "changed session key must fail");
+  await t.test("every public input is bound", async () => {
+    for (let i = 0; i < p.input.length; i++) {
+      const bad = { ...p, input: [...p.input] };
+      bad.input[i] = bad.input[i] + 1n;
+      assert.equal(
+        await verify(verifier, bad),
+        false,
+        `changed public input ${i} must fail`,
+      );
+    }
   });
 
   await t.test("tampered proof is rejected", async () => {
     const bad = { ...p, a: [p.a[0], p.a[1]] };
     bad.a[0] = "0x" + (BigInt(bad.a[0]) + 1n).toString(16);
     assert.equal(await verify(verifier, bad), false, "changed A must fail");
+  });
+
+  await t.test("a well-formed but wrong A point is rejected", async () => {
+    // Negating y keeps A on the curve; the pairing must still reject it. The
+    // simple `x + 1` tamper above exercises the precompile's curve check
+    // instead, so this covers the pairing equation itself.
+    const q =
+      21888242871839275222246405745257275088696311157297823662689037894645226208583n;
+    const wrongA = [p.a[0], "0x" + ((q - BigInt(p.a[1])) % q).toString(16)];
+    const bad = { ...p, a: wrongA };
+    assert.equal(await verify(verifier, bad), false, "wrong A point must fail");
+  });
+
+  await t.test("unswapped B coordinates are rejected", async () => {
+    const rawB = [
+      [p.proof.pi_b[0][0], p.proof.pi_b[0][1]],
+      [p.proof.pi_b[1][0], p.proof.pi_b[1][1]],
+    ];
+    const bad = { ...p, b: rawB };
+    assert.equal(await verify(verifier, bad), false, "raw B order must fail");
   });
 
   await t.test("verifier stays inside the measured budget", async () => {
