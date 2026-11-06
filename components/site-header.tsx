@@ -10,23 +10,61 @@ import {
   ShieldCheck,
   ShieldAlert,
   ShieldQuestion,
-  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { ConnectWalletButton } from "@/components/connect-wallet-button";
 import { useAnonRpc } from "@/lib/anonRpc";
+import { useRole, type Role } from "@/lib/role";
 
-const links = [
-  { href: "/", label: "Overview" },
-  { href: "/company/new", label: "Register company" },
-  { href: "/admin", label: "Admin" },
-  { href: "/pay", label: "Pay" },
-];
+const navLinks: Record<Role, { href: string; label: string }[]> = {
+  user: [
+    { href: "/", label: "Overview" },
+    { href: "/register", label: "Register" },
+    { href: "/pay", label: "Pay" },
+  ],
+  admin: [
+    { href: "/", label: "Overview" },
+    { href: "/company/new", label: "Register company" },
+    { href: "/admin", label: "Admin" },
+  ],
+};
+
+function RoleSwitch({ className }: { className?: string }) {
+  const { role, setRole } = useRole();
+  return (
+    <div
+      className={cn(
+        "flex items-center rounded-lg border border-border bg-secondary/60 p-0.5",
+        className,
+      )}
+      role="group"
+      aria-label="Switch role"
+    >
+      {(["user", "admin"] as const).map((r) => (
+        <button
+          key={r}
+          type="button"
+          onClick={() => setRole(r)}
+          aria-pressed={role === r}
+          className={cn(
+            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+            role === r
+              ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {r === "user" ? "User" : "Admin"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function SiteHeader() {
   const pathname = usePathname();
   const { mode } = useAnonRpc();
+  const { role } = useRole();
   const [open, setOpen] = useState(false);
   // Gate transport-dependent UI on mount: the anon-rpc mode resolves in an
   // effect after hydration, and must never diverge from the SSR HTML.
@@ -56,6 +94,8 @@ export function SiteHeader() {
         : mode === "starting"
           ? { label: "privacy…", variant: "outline" as const, Icon: ShieldQuestion }
           : { label: "direct RPC", variant: "warning" as const, Icon: ShieldAlert };
+
+  const links = navLinks[role];
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur-xl">
@@ -94,26 +134,24 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="hidden lg:inline-flex">
+          <Badge variant="outline" className="hidden xl:inline-flex">
             EIP-8141 · devnet
           </Badge>
           {mounted ? (
-            <Badge variant={privacy.variant} className="hidden sm:inline-flex">
+            <Badge variant={privacy.variant} className="hidden lg:inline-flex">
               <privacy.Icon className="mr-1 h-3 w-3" />
               {privacy.label}
             </Badge>
           ) : (
-            <Badge variant="outline" className="hidden sm:inline-flex">
+            <Badge variant="outline" className="hidden lg:inline-flex">
               <ShieldQuestion className="mr-1 h-3 w-3" />
               privacy…
             </Badge>
           )}
-          <Link
-            href="/company/new"
-            className={cn(buttonVariants({ size: "sm" }), "hidden md:inline-flex")}
-          >
-            Get started <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <RoleSwitch className="hidden sm:flex" />
+          <div className="hidden md:block">
+            <ConnectWalletButton />
+          </div>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -130,6 +168,7 @@ export function SiteHeader() {
       {open ? (
         <div className="border-t border-border/60 md:hidden">
           <nav className="container flex flex-col gap-1 py-4">
+            <RoleSwitch className="mb-2 self-start" />
             {links.map((link) => {
               const active =
                 link.href === "/"
@@ -162,12 +201,9 @@ export function SiteHeader() {
                 </Badge>
               )}
             </div>
-            <Link
-              href="/company/new"
-              className={cn(buttonVariants(), "mt-3")}
-            >
-              Get started <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="mt-3 px-3">
+              <ConnectWalletButton />
+            </div>
           </nav>
         </div>
       ) : null}

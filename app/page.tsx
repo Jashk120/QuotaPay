@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   ArrowRight,
@@ -5,8 +7,11 @@ import {
   Building2,
   CircleDollarSign,
   Fuel,
+  KeyRound,
   Landmark,
   ShieldCheck,
+  Sparkles,
+  UserPlus,
   UserRound,
   Wallet,
 } from "lucide-react";
@@ -20,6 +25,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { config, isLiveConfigured } from "@/lib/config";
+import { useRole, type Role } from "@/lib/role";
 
 const roles = [
   {
@@ -36,6 +42,44 @@ const roles = [
     icon: Wallet,
     title: "Paymaster",
     body: "Isolated per company. Enforces per-wallet credit, the company cap, and ETH solvency.",
+  },
+];
+
+const howItWorks: {
+  icon: typeof Building2;
+  step: string;
+  title: string;
+  body: string;
+  cta: string;
+  href: string;
+  role: Role;
+}[] = [
+  {
+    icon: Building2,
+    step: "01",
+    title: "Register your company",
+    body: "The admin deploys an isolated paymaster, sets the credit cap, and funds the gas tank.",
+    cta: "Register a company",
+    href: "/company/new",
+    role: "admin",
+  },
+  {
+    icon: UserPlus,
+    step: "02",
+    title: "Register as a beneficiary",
+    body: "A user creates their sponsored wallet and asks the company to authorize it.",
+    cta: "Register as a user",
+    href: "/register",
+    role: "user",
+  },
+  {
+    icon: Sparkles,
+    step: "03",
+    title: "Pay with 0 ETH",
+    body: "The beneficiary proves eligibility and the paymaster covers the gas — no balance needed.",
+    cta: "Try a payment",
+    href: "/pay",
+    role: "user",
   },
 ];
 
@@ -67,9 +111,11 @@ const steps = [
 ];
 
 export default function HomePage() {
+  const { setRole } = useRole();
+
   return (
-    <div className="space-y-20">
-      <section className="relative">
+    <div className="space-y-24">
+      <section className="relative pt-6 sm:pt-10">
         <div className="mx-auto max-w-3xl space-y-6 text-center">
           <Badge variant="default" className="mx-auto">
             EIP-8141 · ERC-8421 · company-scoped sponsorship
@@ -86,39 +132,118 @@ export default function HomePage() {
             isolated paymaster and a real solvency ledger per company.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Button asChild size="lg">
+            <Button asChild size="lg" onClick={() => setRole("admin")}>
               <Link href="/company/new">
-                Register a company <ArrowRight className="h-4 w-4" />
+                <Building2 className="h-4 w-4" /> I&apos;m a company admin
+                <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/pay">Try a sponsored payment</Link>
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              onClick={() => setRole("user")}
+            >
+              <Link href="/register">
+                <UserPlus className="h-4 w-4" /> I&apos;m a beneficiary
+              </Link>
             </Button>
+          </div>
+
+          <div className="mx-auto mt-8 flex max-w-xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              Isolated paymasters
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5 text-primary" />
+              Zero-knowledge eligibility
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <BadgeCheck className="h-3.5 w-3.5 text-primary" />
+              Per-company solvency ledger
+            </span>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {roles.map((role) => (
-          <Card key={role.title}>
-            <CardHeader>
-              <div className="mb-2 grid h-10 w-10 place-items-center rounded-lg bg-primary/10 ring-1 ring-primary/25">
-                <role.icon className="h-5 w-5 text-primary" />
-              </div>
-              <CardTitle>{role.title}</CardTitle>
-              <CardDescription>{role.body}</CardDescription>
-            </CardHeader>
-          </Card>
-        ))}
+      <section className="space-y-6">
+        <div className="mx-auto max-w-2xl space-y-2 text-center">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            How it works
+          </h2>
+          <p className="text-balance text-sm text-muted-foreground">
+            Two sides, one sponsorship account. Admins set the budget; users
+            register and pay without ever holding ETH.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {howItWorks.map((item) => (
+            <Card
+              key={item.step}
+              className="group relative flex flex-col overflow-hidden"
+            >
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 ring-1 ring-primary/25">
+                    <item.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="font-mono text-3xl font-semibold text-foreground/10">
+                    {item.step}
+                  </span>
+                </div>
+                <CardTitle className="text-base">{item.title}</CardTitle>
+                <CardDescription>{item.body}</CardDescription>
+              </CardHeader>
+              <CardContent className="mt-auto">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setRole(item.role)}
+                >
+                  <Link href={item.href}>
+                    {item.cta} <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-6">
+        <div className="mx-auto max-w-2xl space-y-2 text-center">
+          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            Built for three roles
+          </h2>
+          <p className="text-balance text-sm text-muted-foreground">
+            Clean separation between who registers, who benefits, and who pays.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {roles.map((role) => (
+            <Card key={role.title}>
+              <CardHeader>
+                <div className="mb-2 grid h-10 w-10 place-items-center rounded-lg bg-primary/10 ring-1 ring-primary/25">
+                  <role.icon className="h-5 w-5 text-primary" />
+                </div>
+                <CardTitle>{role.title}</CardTitle>
+                <CardDescription>{role.body}</CardDescription>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
       </section>
 
       <section className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
               One payment, four frames
             </h2>
-            <p className="text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               The paymaster pays only when the charge for this exact transaction
               is recorded first.
             </p>
@@ -181,10 +306,10 @@ export default function HomePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Devnet status</CardTitle>
+            <CardTitle>Live configuration</CardTitle>
             <CardDescription>
-              Configure via <span className="font-mono">NEXT_PUBLIC_*</span> env
-              vars.
+              Reads from <span className="font-mono">NEXT_PUBLIC_*</span> env
+              vars at build time.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
