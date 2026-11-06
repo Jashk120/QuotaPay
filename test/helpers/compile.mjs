@@ -12,6 +12,7 @@ const CACHE = new URL("./.artifacts-cache.json", import.meta.url);
 const LOCAL_SOURCES = {
   "CompanyPaymaster.sol": "contracts/CompanyPaymaster.sol",
   "CompanyFactory.sol": "contracts/CompanyFactory.sol",
+  "BlindTokenPaymaster.sol": "contracts/BlindTokenPaymaster.sol",
   "QuotaPayPreVerify.sol": "contracts/QuotaPayPreVerify.sol",
   "CompanyTypes.sol": "contracts/libraries/CompanyTypes.sol",
   "IStakingRegistry.sol": "contracts/interfaces/IStakingRegistry.sol",
@@ -74,7 +75,7 @@ export function compileAll() {
     language: "Solidity",
     sources,
     settings: {
-      evmVersion: "cancun",
+      evmVersion: "shanghai",
       optimizer: { enabled: true, runs: 200 },
       outputSelection: { "*": { "*": ["abi", "evm.bytecode.object", "evm.deployedBytecode.object"] } },
     },
@@ -104,3 +105,4 @@ export function compileAll() {
   fs.writeFileSync(CACHE, JSON.stringify({ hash, artifacts }));
   return artifacts;
 }
+
