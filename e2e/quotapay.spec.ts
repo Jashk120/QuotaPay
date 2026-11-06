@@ -1,9 +1,15 @@
 import { test, expect } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 
 const ADMIN = "0x1111111111111111111111111111111111111111";
 const PAYMASTER = "0x2222222222222222222222222222222222222222";
 const BOB = "0x4444444444444444444444444444444444444444";
 const RECIPIENT = "0x5555555555555555555555555555555555555555";
+
+const hasProverAssets = fs.existsSync(
+  path.resolve("public/zk/Membership_final.zkey"),
+);
 
 test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
   page,
@@ -12,7 +18,7 @@ test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
   let sessionAddress = "";
   await test.step("beneficiary session key is generated", async () => {
     await page.goto("/pay");
-    const session = page.getByTestId("session-address");
+    const session = page.getByTestId("zk-session");
     await expect(session).toHaveText(/^0x[0-9a-fA-F]{40}$/);
     sessionAddress = (await session.textContent())?.trim() ?? "";
     expect(sessionAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
@@ -67,40 +73,30 @@ test("QuotaPay UI: register company, add paymaster, add users, pay", async ({
     await expect(bob).toContainText("revoked");
   });
 
-  // 5. The default path: issue a blind token inline, then build the payment.
-  await test.step("beneficiary issues a blind token and builds a payment", async () => {
+  // 5. The default path: load a ZK credential, prove, build the payment.
+  await test.step("beneficiary loads a ZK credential and builds a payment", async () => {
+    test.skip(
+      !hasProverAssets,
+      "run npm run zk:publish before the ZK browser test",
+    );
+    const credential = fs.readFileSync(
+      path.resolve("test/fixtures/zk/credential.json"),
+      "utf8",
+    );
     await page.goto("/pay");
-    await expect(page.getByTestId("session-address")).toHaveText(sessionAddress);
-    await expect(page.getByTestId("blind-required")).toBeVisible();
+    await expect(page.getByTestId("zk-session")).toHaveText(sessionAddress);
 
-    await page.locator("#blind-paymaster").fill(PAYMASTER);
-    await page.locator("#blind-epoch").fill("0");
-    await page.locator("#blind-maxcost").fill("0.002");
-    await page.getByTestId("blind-create").click();
-    await expect(page.getByTestId("blind-blinded")).toBeVisible();
-    await page.getByTestId("blind-sign").click();
-    await expect(page.getByTestId("blind-signed")).toBeVisible();
-    await page.getByTestId("blind-finalize").click();
+    await page.locator("textarea").fill(credential);
+    await page.getByRole("button", { name: "Use credential" }).click();
+    await expect(page.getByText(/Credential loaded in this browser/)).toBeVisible();
 
-    // The inline issuer unmounts once the parent receives the token.
-    await expect(page.getByTestId("charge-mode")).toContainText("Blind token");
-    await expect(page.getByTestId("blind-required")).toHaveCount(0);
+    await page.getByTestId("zk-prove").click();
+    await expect(page.getByTestId("zk-proof")).toBeVisible({ timeout: 60_000 });
 
-    await expect(page.locator("#pay-paymaster")).toHaveValue(PAYMASTER);
-    await expect(page.getByTestId("anon-mode")).toBeVisible();
-
-    await page.getByLabel("Recipient").fill(RECIPIENT);
-    await page.getByLabel("Amount (ETH)").fill("0.001");
-    await page.getByRole("button", { name: /build & sign/i }).click();
-
-    const signed = page.getByTestId("signed-tx");
-    await expect(signed).toBeVisible();
-    await expect(signed).toContainText("Signed frame transaction");
-    await expect(signed).toContainText("Frames");
-    await expect(signed.getByText("#0", { exact: false })).toBeVisible();
-    await expect(signed.getByText("#3", { exact: false })).toBeVisible();
+    await page.locator("#zk-to").fill(RECIPIENT);
+    await page.getByTestId("zk-build").click();
+    await expect(page.getByTestId("zk-signed")).toContainText("4 frames");
   });
-
   // 6. Submission is refused while demo submit is disabled.
   await test.step("submission is guarded while submit is disabled", async () => {
     await page.getByRole("button", { name: /submit sponsored tx/i }).click();

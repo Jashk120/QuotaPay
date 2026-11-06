@@ -18,7 +18,7 @@ test("ZK membership UI: load credential, prove, build signed frame", async ({
     "utf8",
   );
 
-  await page.goto("/zk");
+  await page.goto("/pay");
   await expect(page.getByText("Step 1 · ZK credential")).toBeVisible();
 
   await page.locator("textarea").fill(credential);

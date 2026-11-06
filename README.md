@@ -90,8 +90,8 @@ and verifies the disabled-submission guard. It runs with
 | `/` | everyone | Overview, flow, devnet status |
 | `/company/new` | company admin | Register a company (deploys an isolated paymaster) |
 | `/admin` | company admin | Authorize beneficiaries, set policy, fund/withdraw |
-| `/pay` | beneficiary | Build, sign, and submit a sponsored frame tx (blind-token path) |
-| `/zk` | beneficiary | ZK membership proof, then build/sign/submit a sponsored frame tx |
+| `/pay` | beneficiary | ZK membership proof, then build/sign/submit a sponsored frame tx |
+| `/blind` | beneficiary | Blind-token issuer demo (legacy path) |
 
 ## Live vs demo mode
 
