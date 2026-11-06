@@ -36,6 +36,7 @@ test("T16 DaoCore: members, caps, admin auth, proposals", async (t) => {
   const agentAddr = await agent.getAddress();
   const core = await deploy(artifacts, "DaoCore", deployer, [
     [id(9001), adminAddr, agentSignerAddr, true, 86400, 3, 3600, 5000],
+    await deployer.getAddress(),
   ]);
   const coreAddr = await core.getAddress();
   await (await core.initializeAgent(agentAddr)).wait();

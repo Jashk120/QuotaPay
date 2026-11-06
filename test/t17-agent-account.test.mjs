@@ -26,6 +26,7 @@ test("T17 AgentAccount: policy, pause and rotation", async (t) => {
     adminAddr,
     signerAddr,
     true,
+    deployerAddr,
   ]);
   const accountAddr = await account.getAddress();
   await (await account.initializeDao(deployerAddr)).wait();
