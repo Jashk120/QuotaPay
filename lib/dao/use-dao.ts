@@ -23,9 +23,16 @@ export function useDaoState(options?: {
   coreAddress?: string;
   name?: string;
 }) {
-  const core = options?.coreAddress || config.daoCoreAddress;
+  // An explicitly supplied core (even "") wins over the env default, so a
+  // /dao/<unknown> route can show "not found" instead of silently reading the
+  // env-configured DAO.
+  const core =
+    options?.coreAddress !== undefined
+      ? options.coreAddress
+      : config.daoCoreAddress;
   const nameOverride =
-    options?.name ?? (options?.coreAddress ? undefined : config.daoName);
+    options?.name ??
+    (options?.coreAddress !== undefined ? undefined : config.daoName);
   const chainMode = Boolean(core);
   const [state, setState] = useState<DaoState>(() =>
     emptyDaoState(chainMode ? core : ""),

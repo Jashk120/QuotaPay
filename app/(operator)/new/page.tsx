@@ -370,11 +370,14 @@ export default function NewDaoPage() {
                   DaoCore: <span className="font-mono">{created}</span>
                 </div>
                 <div className="text-xs">
-                  Set <span className="font-mono">NEXT_PUBLIC_DAO_CORE</span> to
-                  this address to open it in the console.
-                </div>
-                <div className="text-xs">
-                  Transfer {treasury} USDC to this address to fund the treasury.
+                  Opening your console…{" "}
+                  <Link
+                    href={`/dao/${created}/chat`}
+                    className="font-medium underline underline-offset-2"
+                  >
+                    open it now
+                  </Link>{" "}
+                  if nothing happens.
                 </div>
               </div>
             </Alert>
