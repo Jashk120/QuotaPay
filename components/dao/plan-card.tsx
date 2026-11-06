@@ -214,14 +214,16 @@ export function PlanCard({
               Approve &amp; execute
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onDismiss(plan)}
-            disabled={busy}
-          >
-            Cancel
-          </Button>
+          {plan.status !== "executed" && !needsNoTx ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => onDismiss(plan)}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+          ) : null}
         </div>
 
         <details className="rounded-lg border border-border/60 bg-background/40 p-3">
