@@ -11,6 +11,12 @@ export const config = {
   defaultPaymaster: (process.env.NEXT_PUBLIC_DEFAULT_PAYMASTER ?? "") as
     | `0x${string}`
     | "",
+  zkPaymaster: (process.env.NEXT_PUBLIC_ZK_PAYMASTER ?? "") as
+    | `0x${string}`
+    | "",
+  zkAssetsBase: process.env.NEXT_PUBLIC_ZK_ASSETS_BASE ?? "/zk",
+  zkDefaultEpoch: process.env.NEXT_PUBLIC_ZK_EPOCH ?? "0",
+  zkDefaultRoot: process.env.NEXT_PUBLIC_ZK_ROOT ?? "",
   stakingRegistry: (process.env.NEXT_PUBLIC_STAKING_REGISTRY ??
     "0xd51c04d7a0b01124e84de152f4e56d9eecb22d2f") as `0x${string}`,
   explorerUrl:
