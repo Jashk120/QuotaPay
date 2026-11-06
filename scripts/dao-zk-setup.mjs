@@ -5,7 +5,9 @@
  * Reuses build/zk/pot14_final.ptau when present, so the expensive phase-1
  * ceremony is shared with the existing Membership circuit. Produces:
  *
- *   build/zk-dao/DaoVote.r1cs / .wasm / .zkey / verification_key.json
+ *   build/zk-dao/work/DaoVote.r1cs / DaoVote_js/DaoVote.wasm
+ *   build/zk-dao/DaoVote_final.zkey
+ *   build/zk-dao/verification_key.json
  *   contracts/zk/DaoVoteVerifier.sol
  *
  * Devnet ceremony only: one local contribution with fixed entropy. A
@@ -21,7 +23,6 @@ const OUT = path.resolve("build/zk-dao");
 const CIRCUIT = path.resolve("circuits/DaoVote.circom");
 const CIRCOM = process.env.CIRCOM;
 const SNARKJS = path.resolve("node_modules/snarkjs/build/cli.cjs");
-const POWER = 14; // the Membership circuit already fits in 16,384 constraints
 
 function run(cmd, argv, opts = {}) {
   console.log(`> ${cmd} ${argv.join(" ")}`);
@@ -52,58 +53,61 @@ fs.mkdirSync(OUT, { recursive: true });
 const WORK = path.join(OUT, "work");
 
 const finalZkey = path.join(OUT, "DaoVote_final.zkey");
-if (fs.existsSync(finalZkey) && !FORCE) {
-  console.log(`using existing ${finalZkey} (pass --force to rebuild)`);
-  process.exit(0);
-}
+const needSetup = FORCE || !fs.existsSync(finalZkey);
+if (!needSetup) console.log(`using existing ${finalZkey}`);
 
-for (const file of fs.readdirSync(OUT)) {
-  if (file.endsWith(".ptau") || file.endsWith(".zkey")) {
-    fs.rmSync(path.join(OUT, file), { force: true, recursive: true });
+if (needSetup) {
+  for (const file of fs.readdirSync(OUT)) {
+    if (file.endsWith(".ptau") || file.endsWith(".zkey")) {
+      fs.rmSync(path.join(OUT, file), { force: true, recursive: true });
+    }
   }
-}
-fs.rmSync(WORK, { force: true, recursive: true });
-fs.mkdirSync(WORK, { recursive: true });
-fs.copyFileSync(CIRCUIT, path.join(WORK, "DaoVote.circom"));
+  fs.rmSync(WORK, { force: true, recursive: true });
+  fs.mkdirSync(WORK, { recursive: true });
+  fs.copyFileSync(CIRCUIT, path.join(WORK, "DaoVote.circom"));
 
-// circom2's WASI path mapping ignores -o on this host: the artifacts land next
-// to the input circuit. Compile a copy inside the work directory instead, so
-// no generated files leak into circuits/.
-circom(
-  "DaoVote.circom",
-  "--r1cs",
-  "--wasm",
-  "--sym",
-  "-l",
-  path.resolve("node_modules/circomlib/circuits"),
-  "-o",
-  ".",
-  { cwd: WORK },
-);
-const r1cs = path.join(WORK, "DaoVote.r1cs");
+  // circom2's WASI path mapping ignores -o on this host: the artifacts land next
+  // to the input circuit. Compile a copy inside the work directory instead, so
+  // no generated files leak into circuits/.
+  circom(
+    "DaoVote.circom",
+    "--r1cs",
+    "--wasm",
+    "--sym",
+    "-l",
+    path.resolve("node_modules/circomlib/circuits"),
+    "-o",
+    ".",
+    { cwd: WORK },
+  );
+  const r1cs = path.join(WORK, "DaoVote.r1cs");
 
-const sharedPtau = path.resolve("build/zk/pot14_final.ptau");
-let ptau = sharedPtau;
-if (!fs.existsSync(ptau)) {
-  // The committed verifier/fixture lineage uses the shared Membership ptau.
-  // Generating a fresh DAO-only ptau would silently produce a different
-  // verification key, so require the shared ceremony instead.
-  throw new Error(
-    `missing ${sharedPtau}; run "node scripts/zk-setup.mjs" once to create the shared pot14 before the DAO setup`,
+  const sharedPtau = path.resolve("build/zk/pot14_final.ptau");
+  if (!fs.existsSync(sharedPtau)) {
+    // The committed verifier/fixture lineage uses the shared Membership ptau.
+    // Generating a fresh DAO-only ptau would silently produce a different
+    // verification key, so require the shared ceremony instead.
+    throw new Error(
+      `missing ${sharedPtau}; run "node scripts/zk-setup.mjs" once to create the shared pot14 before the DAO setup`,
+    );
+  }
+
+  const z0 = path.join(OUT, "DaoVote_0000.zkey");
+  snark("groth16", "setup", r1cs, sharedPtau, z0);
+  snark(
+    "zkey",
+    "contribute",
+    z0,
+    finalZkey,
+    "--name=quotapay-dao-devnet",
+    "-e=quotapay-dao-zk-devnet-zkey",
+    "-v",
   );
 }
 
-const z0 = path.join(OUT, "DaoVote_0000.zkey");
-snark("groth16", "setup", r1cs, ptau, z0);
-snark(
-  "zkey",
-  "contribute",
-  z0,
-  finalZkey,
-  "--name=quotapay-dao-devnet",
-  "-e=quotapay-dao-zk-devnet-zkey",
-  "-v",
-);
+// Always re-export and patch: an interrupted previous run can leave a fresh
+// zkey with a stale Solidity verifier, and re-running the expensive setup
+// would be unnecessary.
 snark(
   "zkey",
   "export",
@@ -116,6 +120,9 @@ const verifierPath = path.resolve("contracts/zk/DaoVoteVerifier.sol");
 snark("zkey", "export", "solidityverifier", finalZkey, verifierPath);
 let source = fs.readFileSync(verifierPath, "utf8");
 source = source.replaceAll("contract Groth16Verifier", "contract DaoVoteVerifier");
+if (!source.includes("contract DaoVoteVerifier")) {
+  throw new Error("snarkjs verifier template no longer contains Groth16Verifier");
+}
 const patches = [
   [
     "success := staticcall(sub(gas(), 2000), 7, mIn, 96, mIn, 64)",

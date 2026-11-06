@@ -4,6 +4,11 @@
  *
  * Usage:
  *   node scripts/dao-vote-proof.mjs [--out build/zk-dao] [--index 0]
+ *     [--dao 0x..] [--chain-id 1337] [--proposal-id 7]
+ *     [--session-key 0x..] [--secret 0x..]
+ *
+ * The fixture in test/fixtures/zk-dao is only overwritten when the inputs are
+ * the committed defaults; pass --write-fixture to force it.
  *
  * The circuit must already be compiled and the zkey present. Run
  * scripts/dao-zk-setup.mjs first.
@@ -30,6 +35,15 @@ const SESSION_KEY = BigInt(
 const SECRET = BigInt(
   arg("secret", "0x1111111111111111111111111111111111111111111111111111111111111111"),
 );
+const WRITE_FIXTURE = args.includes("--write-fixture");
+const DEFAULT_FIXTURE_INPUTS =
+  INDEX === 0 &&
+  DAO === 0x000000000000000000000000000000000000da0an &&
+  CHAIN_ID === 1337n &&
+  PROPOSAL_ID === 7n &&
+  SESSION_KEY === 0x348836a9b164f241945205b5a92f496bb8c3c1d8n &&
+  SECRET ===
+    0x1111111111111111111111111111111111111111111111111111111111111111n;
 
 const demoSecrets = [
   SECRET,
@@ -63,6 +77,14 @@ const proofPath = path.join(OUT, "vote-proof.json");
 const publicPath = path.join(OUT, "vote-public.json");
 const wasmPath = path.join(OUT, "work", "DaoVote_js", "DaoVote.wasm");
 const zkeyPath = path.join(OUT, "DaoVote_final.zkey");
+for (const [label, file] of [
+  ["wasm", wasmPath],
+  ["zkey", zkeyPath],
+]) {
+  if (!fs.existsSync(file)) {
+    throw new Error(`missing ${label} at ${file}; run "node scripts/dao-zk-setup.mjs --force" first`);
+  }
+}
 fs.writeFileSync(inputPath, JSON.stringify(witness.input, null, 2) + "\n");
 
 const snarkjsCli = path.resolve("node_modules/snarkjs/build/cli.cjs");
@@ -95,13 +117,20 @@ run([
   proofPath,
 ]);
 
-// The DAO test suite reads these committed copies.
-const fixtureDir = path.resolve("test/fixtures/zk-dao");
-fs.mkdirSync(fixtureDir, { recursive: true });
-fs.copyFileSync(proofPath, path.join(fixtureDir, "proof.json"));
-fs.copyFileSync(publicPath, path.join(fixtureDir, "public.json"));
+// The DAO test suite reads these committed copies. Only replace them when the
+// proof corresponds to the fixture inputs (or --write-fixture was passed).
+if (WRITE_FIXTURE || DEFAULT_FIXTURE_INPUTS) {
+  const fixtureDir = path.resolve("test/fixtures/zk-dao");
+  fs.mkdirSync(fixtureDir, { recursive: true });
+  fs.copyFileSync(proofPath, path.join(fixtureDir, "proof.json"));
+  fs.copyFileSync(publicPath, path.join(fixtureDir, "public.json"));
+  console.log(`copied proof.json and public.json to ${fixtureDir}`);
+} else {
+  console.log(
+    "left test/fixtures/zk-dao untouched (non-default inputs; pass --write-fixture to replace)",
+  );
+}
 
 console.log(`\nproof:  ${proofPath}`);
 console.log(`public: ${publicPath}`);
-console.log(`copied proof.json and public.json to ${fixtureDir}`);
 console.log("public inputs:", JSON.parse(fs.readFileSync(publicPath, "utf8")));
