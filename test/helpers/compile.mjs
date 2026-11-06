@@ -16,6 +16,7 @@ const LOCAL_SOURCES = {
   "ZkPaymaster.sol": "contracts/ZkPaymaster.sol",
   "DaoVotePaymaster.sol": "contracts/DaoVotePaymaster.sol",
   "DaoGasPaymaster.sol": "contracts/DaoGasPaymaster.sol",
+  "SharedDaoGasPaymaster.sol": "contracts/SharedDaoGasPaymaster.sol",
   "Groth16Verifier.sol": "contracts/zk/Groth16Verifier.sol",
   "zk/DaoVoteVerifier.sol": "contracts/zk/DaoVoteVerifier.sol",
   "QuotaPayPreVerify.sol": "contracts/QuotaPayPreVerify.sol",

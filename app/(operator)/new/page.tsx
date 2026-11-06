@@ -31,7 +31,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { config } from "@/lib/config";
 import { publicClient } from "@/lib/contracts";
-import { daoFactoryAbi } from "@/lib/daoAbis.mjs";
+import { daoFactoryAbi, sharedDaoGasPaymasterAbi } from "@/lib/daoAbis.mjs";
 import { daoIdFromName } from "@/lib/dao/factory";
 import { useConnectedWallet } from "@/lib/wallet";
 
@@ -174,6 +174,21 @@ export default function NewDaoPage() {
       })[0]?.args;
       if (!createdEvent) throw new Error("DaoCreated event not found");
       setCreated(createdEvent.daoCore);
+      if (config.daoGasPaymaster) {
+        try {
+          const allowHash = await writeContractAsync({
+            address: config.daoGasPaymaster,
+            abi: sharedDaoGasPaymasterAbi,
+            functionName: "allowAgent",
+            args: [createdEvent.daoCore],
+          });
+          await publicClient.waitForTransactionReceipt({ hash: allowHash });
+        } catch (cause) {
+          // The DAO exists; the chat page offers an "Enable gas sponsorship"
+          // button if this second transaction did not land.
+          console.warn("allowAgent failed", cause);
+        }
+      }
       router.push(`/dao/${createdEvent.daoCore}/chat`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { isAddress, type Address } from "viem";
+import { encodeFunctionData, isAddress, type Address } from "viem";
 import {
   useAccount,
   useSendTransaction,
@@ -36,7 +36,7 @@ import { TreasuryPanel } from "@/components/dao/treasury-panel";
 import { config, isDaoChainConfigured } from "@/lib/config";
 import { devnet, publicClient } from "@/lib/contracts";
 import { parsePrompt } from "@/lib/dao/agent.mjs";
-import { daoCoreAbi } from "@/lib/daoAbis.mjs";
+import { daoCoreAbi, sharedDaoGasPaymasterAbi } from "@/lib/daoAbis.mjs";
 import { money, percent } from "@/lib/dao/format";
 import { shortHash, withHashes } from "@/lib/dao/hash";
 import { executeMessage } from "@/lib/dao/executeAuth";
@@ -127,6 +127,56 @@ export default function DaoConsolePage() {
     Boolean(walletAddress) &&
     Boolean(state.config.adminAddress) &&
     walletAddress!.toLowerCase() === state.config.adminAddress.toLowerCase();
+
+  const [sponsorship, setSponsorship] = useState<
+    "unknown" | "allowed" | "missing"
+  >("unknown");
+
+  useEffect(() => {
+    let cancelled = false;
+    const paymaster = config.daoGasPaymaster;
+    const agent = state.config.agentAddress;
+    if (!paymaster || !agent || !isAddress(agent)) {
+      setSponsorship("unknown");
+      return;
+    }
+    publicClient
+      .readContract({
+        address: paymaster,
+        abi: sharedDaoGasPaymasterAbi,
+        functionName: "allowedAgents",
+        args: [agent],
+      })
+      .then((ok) => {
+        if (!cancelled) setSponsorship(ok ? "allowed" : "missing");
+      })
+      .catch(() => {
+        if (!cancelled) setSponsorship("unknown");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.config.agentAddress, refreshing]);
+
+  async function enableSponsorship() {
+    if (!config.daoGasPaymaster || !core) return;
+    if (!(await ensureChain())) return;
+    try {
+      const data = encodeFunctionData({
+        abi: sharedDaoGasPaymasterAbi,
+        functionName: "allowAgent",
+        args: [core],
+      });
+      const hash = await sendTransactionAsync({
+        to: config.daoGasPaymaster,
+        data,
+      });
+      setChainMessage(`Gas sponsorship enabled: ${hash}`);
+      await refresh();
+    } catch (cause) {
+      setChainMessage(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
 
   async function sendPrompt(text: string) {
     const prompt = text.trim();
@@ -487,6 +537,14 @@ export default function DaoConsolePage() {
                 admin {shortHash(state.config.adminAddress, 6, 4)}
               </Badge>
             ) : null}
+            {sponsorship === "allowed" ? (
+              <Badge
+                variant="success"
+                title="The shared gas paymaster sponsors this DAO's agent"
+              >
+                gas sponsored
+              </Badge>
+            ) : null}
             {walletAddress &&
             state.config.adminAddress &&
             walletAddress.toLowerCase() !==
@@ -582,6 +640,24 @@ export default function DaoConsolePage() {
             Connect that wallet to execute. Any other wallet can only read.
           </Alert>
         )
+      ) : null}
+
+      {isAdmin && sponsorship === "missing" ? (
+        <Alert
+          variant="warning"
+          title="Gas sponsorship is not enabled for this DAO"
+        >
+          <div className="space-y-2">
+            <p>
+              The shared gas paymaster does not allow this DAO&apos;s agent yet.
+              Enable it once so the agent can submit sponsored frame
+              transactions.
+            </p>
+            <Button size="sm" onClick={() => void enableSponsorship()}>
+              Enable gas sponsorship
+            </Button>
+          </div>
+        </Alert>
       ) : null}
 
       {chainError ? (

@@ -14,5 +14,6 @@
   "gasPaymaster": "0xd805a3c228195500a5ea1e3c287e118235aff3fa",
   "voteVerifier": null,
   "votePaymaster": null,
-  "deployedAt": "2026-11-06T19:49:38.374Z"
+  "deployedAt": "2026-11-06T19:49:38.374Z",
+  "sharedGasPaymaster": "0x3ea02968ca1157f15bb18a0ea5118c6c9ff0d107"
 }
