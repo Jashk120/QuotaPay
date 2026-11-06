@@ -208,6 +208,31 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
   probe shows that chain 1337 cannot read SENDER frames during VERIFY, deploy
   with `DAO_FRAME_ENFORCED=false`; `DaoCore` remains the enforcement point.
 - The demo asset and price are mocks. No real RWA custody or oracle.
-- The UI is a local simulation. Its admin/config signature dialogs are not
-  submitted to `DaoCore`, and the join page's invite commitment is not yet the
-  Poseidon leaf the vote circuit expects.
+- Without `NEXT_PUBLIC_DAO_CORE` the UI is a local simulation. With it set, the
+  console reads `DaoCore` and submits real agent frame transactions. The join
+  page's invite commitment is still not the Poseidon leaf the vote circuit
+  expects.
+- Governance is not encoded by the console yet. Tier-1 (spend, acquire) and
+  tier-2 (add/remove member, set role, dispose) actions execute on-chain;
+  tier-3 proposals are displayed but not created or executed from the UI.
+
+## On-chain console mode
+
+Set `NEXT_PUBLIC_DAO_CORE` to a deployed `DaoCore` and the operator console
+switches from localStorage to the chain:
+
+- **Reads.** `lib/dao/chain.ts` reads members, roles, caps, proposals, assets,
+  balances, policy rules and `ActionExecuted` logs. `localStorage` keeps only
+  presentation labels (member names, asset kinds, proposal titles, invites) in
+  `dao.operator.labels.v1`; deleting it changes what the DAO is called, never
+  what it can do.
+- **Writes.** `lib/dao/planTx.ts` maps a plan to the exact `DaoCore` call and
+  recomputes `paramsHash` with the contract's own `abi.encode` shape, so the
+  admin signs the call that will run. `POST /api/dao/execute` builds and signs
+  an EIP-8141 frame transaction with `DAO_AGENT_KEY`; the agent account is
+  `tx.sender`, never the browser wallet.
+- **Pause.** `DaoCore.pauseAgent` is `onlyAdmin`, so it is sent directly by
+  the connected admin wallet rather than through the agent account.
+- **Env.** `DAO_AGENT_KEY` must equal `AgentAccount.agentSigner()`;
+  `NEXT_PUBLIC_DAO_GAS_PAYMASTER` sponsors the frame; `DAO_CORE`,
+  `DAO_RPC_URL` and `DAO_CHAIN_ID` optionally override the public values.

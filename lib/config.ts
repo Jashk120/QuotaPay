@@ -33,10 +33,33 @@ export const config = {
   anonBootstrapRpc:
     process.env.NEXT_PUBLIC_ANON_RPC_BOOTSTRAP_RPC ??
     "https://ethereum-rpc.publicnode.com",
+
+  // ---- DAO operator (on-chain mode) -------------------------------------
+  // Set NEXT_PUBLIC_DAO_CORE to the deployed DaoCore and the console reads
+  // its state from the chain instead of localStorage. Without it the console
+  // falls back to the local simulation.
+  daoCoreAddress: (process.env.NEXT_PUBLIC_DAO_CORE ?? "") as
+    | `0x${string}`
+    | "",
+  daoGasPaymaster: (process.env.NEXT_PUBLIC_DAO_GAS_PAYMASTER ?? "") as
+    | `0x${string}`
+    | "",
+  daoName: process.env.NEXT_PUBLIC_DAO_NAME ?? "",
+  usdcAddress: (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? "") as
+    | `0x${string}`
+    | "",
+  usdcDecimals: Number(process.env.NEXT_PUBLIC_USDC_DECIMALS ?? 6),
+  daoRefreshMs: Number(process.env.NEXT_PUBLIC_DAO_REFRESH_MS ?? 15000),
 };
 
 /** True when a factory address is configured, i.e. admin actions can go on-chain. */
 export const isLiveConfigured = !demoMode && Boolean(config.factoryAddress);
+
+/**
+ * True when a DaoCore address is configured. The DAO console then treats the
+ * chain as the source of truth and executes plans through the agent.
+ */
+export const isDaoChainConfigured = Boolean(config.daoCoreAddress);
 
 export const demoDefaults = {
   globalCreditLimit: 500n,

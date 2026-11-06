@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import type { Address } from "viem";
+import { useSendTransaction, useSignMessage } from "wagmi";
 import {
   Boxes,
   Coins,
   Plus,
+  RefreshCw,
   RotateCcw,
   ScrollText,
   ShieldCheck,
@@ -26,10 +29,22 @@ import { ProposalsPanel } from "@/components/dao/proposals-panel";
 import { TierBadge } from "@/components/dao/tier-badge";
 import { TreasuryPanel } from "@/components/dao/treasury-panel";
 import type { VoteChoice } from "@/components/dao/private-vote-panel";
+import { isDaoChainConfigured } from "@/lib/config";
+import { publicClient } from "@/lib/contracts";
 import { parsePrompt } from "@/lib/dao/agent.mjs";
+import { daoCoreAbi } from "@/lib/daoAbis.mjs";
 import { money, percent } from "@/lib/dao/format";
 import { fakeTxHash, shortHash, withHashes } from "@/lib/dao/hash";
+import { patchLabels } from "@/lib/dao/labels";
+import { executeMessage } from "@/lib/dao/executeAuth";
+import {
+  encodeCall,
+  preparePlan,
+  type AdminAuth,
+  type PreparedCall,
+} from "@/lib/dao/planTx";
 import { useDaoState } from "@/lib/dao/use-dao";
+import { useConnectedWallet } from "@/lib/wallet";
 import type {
   ActionType,
   ChatItem,
@@ -74,15 +89,21 @@ function sleep(ms: number) {
 }
 
 export default function DaoConsolePage() {
-  const { state, update, reset } = useDaoState();
+  const { state, update, reset, ready, source, chainError, refreshing, refresh } =
+    useDaoState();
+  const { sendTransactionAsync } = useSendTransaction();
+  const { signMessageAsync } = useSignMessage();
+  const { address: walletAddress } = useConnectedWallet();
   const [tab, setTab] = useState<Tab>("members");
   const [items, setItems] = useState<ChatItem[]>([]);
   const [plans, setPlans] = useState<Record<string, Plan>>({});
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null);
   const [llmSource, setLlmSource] = useState<string | null>(null);
+  const [chainMessage, setChainMessage] = useState<string | null>(null);
   const [signing, setSigning] = useState<{
     plan: Plan;
     request: SignatureRequest;
+    call: PreparedCall | null;
   } | null>(null);
 
   const activeMembers = state.members.filter((member) => member.active);
@@ -191,12 +212,40 @@ export default function DaoConsolePage() {
     }
   }
 
-  function requestSignature(plan: Plan) {
+  async function requestSignature(plan: Plan, call?: PreparedCall) {
+    let prepared = call ?? null;
+    if (!prepared && isDaoChainConfigured) {
+      const result = await preparePlan(plan, state);
+      if (!result.ok) {
+        setChainMessage(result.reason);
+        return;
+      }
+      prepared = result.call;
+    }
+    if (prepared?.direct) {
+      await submitCall(plan, prepared);
+      return;
+    }
+    let nonce = Date.now();
+    if (isDaoChainConfigured) {
+      try {
+        const chainNonce = await publicClient.readContract({
+          address: state.config.coreAddress as Address,
+          abi: daoCoreAbi,
+          functionName: "adminNonce",
+        });
+        nonce = Number(chainNonce);
+      } catch {
+        nonce = Date.now();
+      }
+    }
     const request: SignatureRequest = {
       title: plan.title,
-      actionType: ACTION_CODES[plan.action],
-      paramsHash: (plan.planHash || `0x${"00".repeat(32)}`) as `0x${string}`,
-      nonce: Date.now(),
+      actionType: call?.actionType ?? ACTION_CODES[plan.action],
+      paramsHash: (call?.paramsHash ??
+        plan.planHash ??
+        `0x${"00".repeat(32)}`) as `0x${string}`,
+      nonce,
       expiry: Date.now() + 60 * 60 * 1000,
       daoCore: state.config.coreAddress,
     };
@@ -208,7 +257,96 @@ export default function DaoConsolePage() {
           }
         : previous,
     );
-    setSigning({ plan, request });
+    setSigning({ plan, request, call: prepared });
+  }
+
+  /** Submit the prepared DaoCore call through the agent (server-side key). */
+  async function submitCall(plan: Plan, call: PreparedCall, auth?: AdminAuth) {
+    setBusyPlanId(plan.id);
+    setChainMessage(null);
+    try {
+      const data = encodeCall(call, auth);
+      let hash: string;
+      if (call.direct) {
+        // pauseAgent is onlyAdmin: the connected admin wallet sends it itself.
+        hash = await sendTransactionAsync({ to: call.to, data });
+      } else {
+        const nonce = String(Date.now());
+        const signature = await signMessageAsync({
+          message: executeMessage(call.to, data, nonce),
+        });
+        const res = await fetch("/api/dao/execute", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            to: call.to,
+            data,
+            actionType: call.actionType,
+            promptHash: plan.promptHash,
+            planHash: plan.planHash,
+            nonce,
+            signature,
+            address: walletAddress,
+          }),
+        });
+        const json = (await res.json()) as {
+          ok?: boolean;
+          hash?: string;
+          error?: string;
+        };
+        if (!res.ok || !json.ok || !json.hash) {
+          throw new Error(json.error ?? `execute failed (${res.status})`);
+        }
+        hash = json.hash;
+      }
+      if (call.secrets?.length) {
+        patchLabels((draft) => {
+          for (const entry of call.secrets ?? []) {
+            draft.members[entry.leaf.toLowerCase()] = {
+              name: entry.name,
+              secret: entry.secret,
+            };
+          }
+        });
+      }
+      setPlans((previous) =>
+        previous[plan.id]
+          ? {
+              ...previous,
+              [plan.id]: {
+                ...previous[plan.id],
+                status: "executed",
+                txHash: hash,
+              },
+            }
+          : previous,
+      );
+      setChainMessage(`Submitted ${hash}`);
+      await refresh();
+    } catch (cause) {
+      setChainMessage(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusyPlanId(null);
+    }
+  }
+
+  async function executeOnChain(plan: Plan) {
+    if (plan.authorization === "vote") {
+      setChainMessage(
+        "Governance actions need a concrete on-chain proposal target; the console does not encode arbitrary proposal calldata yet.",
+      );
+      return;
+    }
+    const prepared = await preparePlan(plan, state);
+    if (!prepared.ok) {
+      setChainMessage(prepared.reason);
+      return;
+    }
+    if (prepared.call.needsAdmin) {
+      await requestSignature(plan, prepared.call);
+      return;
+    }
+    await submitCall(plan, prepared.call);
   }
 
   async function runPlan(plan: Plan, authorizer: string) {
@@ -228,12 +366,16 @@ export default function DaoConsolePage() {
   }
 
   function executePlan(plan: Plan) {
+    if (isDaoChainConfigured) {
+      void executeOnChain(plan);
+      return;
+    }
     if (plan.authorization === "vote") {
       openProposal(plan);
       return;
     }
     if (plan.authorization === "admin") {
-      requestSignature(plan);
+      void requestSignature(plan);
       return;
     }
     if (plan.authorization === "admin-only") {
@@ -246,6 +388,12 @@ export default function DaoConsolePage() {
   }
 
   function openProposal(plan: Plan) {
+    if (isDaoChainConfigured) {
+      setChainMessage(
+        "Governance actions need a concrete on-chain proposal target; the console does not encode arbitrary proposal calldata yet.",
+      );
+      return;
+    }
     if (plan.proposalId) {
       setTab("proposals");
       return;
@@ -282,6 +430,12 @@ export default function DaoConsolePage() {
   }
 
   function executeProposal(proposal: Proposal) {
+    if (isDaoChainConfigured) {
+      setChainMessage(
+        "Proposals execute through DaoCore.executeProposal once the vote closes; the console does not submit that call yet.",
+      );
+      return;
+    }
     const txHash = fakeTxHash(proposal.planHash);
     update((draft) => {
       const row = draft.proposals.find((item) => item.id === proposal.id);
@@ -291,6 +445,12 @@ export default function DaoConsolePage() {
   }
 
   function onVoted(proposal: Proposal, choice: VoteChoice) {
+    if (isDaoChainConfigured) {
+      setChainMessage(
+        "Votes are cast on-chain through the ZK vote paymaster; this button is demo-only.",
+      );
+      return;
+    }
     const txHash = fakeTxHash(`${proposal.planHash}:${choice}`);
     update((draft) => {
       const row = draft.proposals.find((item) => item.id === proposal.id);
@@ -313,6 +473,12 @@ export default function DaoConsolePage() {
   }
 
   function simulateVotes(proposal: Proposal) {
+    if (isDaoChainConfigured) {
+      setChainMessage(
+        "Simulated votes are disabled while the console is reading a real DAO.",
+      );
+      return;
+    }
     const txHash = fakeTxHash(`${proposal.planHash}:simulated`);
     update((draft) => {
       const row = draft.proposals.find((item) => item.id === proposal.id);
@@ -335,6 +501,10 @@ export default function DaoConsolePage() {
   }
 
   function handleReset() {
+    if (isDaoChainConfigured) {
+      void refresh();
+      return;
+    }
     if (typeof window !== "undefined" && !window.confirm("Reset the local demo DAO?")) {
       return;
     }
@@ -352,10 +522,27 @@ export default function DaoConsolePage() {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">DAO operator</Badge>
+            {ready ? (
+              <Badge
+                variant={source === "chain" ? "success" : "warning"}
+                title={
+                  source === "chain"
+                    ? "State read from DaoCore; writes go through the agent"
+                    : "localStorage simulation — set NEXT_PUBLIC_DAO_CORE to use the chain"
+                }
+              >
+                {source === "chain" ? "on-chain" : "local simulation"}
+              </Badge>
+            ) : (
+              <Badge variant="outline">connecting…</Badge>
+            )}
             <Badge variant="success">cloud worker</Badge>
             <Badge variant="outline" title="Intent parser in use">
               {llmSource?.startsWith("llm:") ? llmSource : "parser: local"}
             </Badge>
+            {refreshing ? (
+              <Badge variant="outline">syncing…</Badge>
+            ) : null}
             {process.env.NEXT_PUBLIC_AGENT_TEST_MODE === "true" ? (
               <Badge variant="warning" title="No wallet signature required">
                 test mode: no auth
@@ -378,42 +565,71 @@ export default function DaoConsolePage() {
               <Plus className="h-4 w-4" /> New DAO
             </Link>
           </Button>
-          <Button variant="ghost" onClick={handleReset}>
-            <RotateCcw className="h-4 w-4" /> Reset demo
-          </Button>
+          {isDaoChainConfigured ? (
+            <Button
+              variant="outline"
+              onClick={() => void refresh()}
+              disabled={refreshing}
+            >
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+          ) : (
+            <Button variant="ghost" onClick={handleReset}>
+              <RotateCcw className="h-4 w-4" /> Reset demo
+            </Button>
+          )}
         </div>
       </div>
 
       <Alert variant="info" title="What is real in this build">
-        Intents are queued in Neon and completed by the VPS worker with the real
-        ReAct loop; the intent parser is a live LLM (deepseek-v4.1-flash) with a
-        deterministic fallback. Tier gates, caps and admin signatures mirror
-        DaoCore/AgentAccount, but on-chain submission is still simulated
-        (<span className="font-mono">EXECUTE_ONCHAIN=false</span>) — proposals and
-        final execution remain a vote away.
+        {source === "chain" ? (
+          <>
+            The console reads this DAO directly from{" "}
+            <span className="font-mono">
+              {shortHash(state.config.coreAddress, 10, 6)}
+            </span>
+            . Executing a plan posts prepared calldata to{" "}
+            <span className="font-mono">/api/dao/execute</span>, which builds and
+            signs an EIP-8141 frame transaction with the agent key — the agent,
+            not your wallet, is <span className="font-mono">tx.sender</span>.
+            Names and invites are local labels; membership, caps, votes and
+            balances come from the chain.
+          </>
+        ) : (
+          <>
+            No <span className="font-mono">NEXT_PUBLIC_DAO_CORE</span> is
+            configured, so this is the localStorage simulation. Intents are
+            queued in Neon and completed by the VPS worker; tier gates and caps
+            mirror DaoCore/AgentAccount, but execution is simulated. Set the DAO
+            address to read and write the real contract.
+          </>
+        )}
       </Alert>
 
+      {chainError ? (
+        <Alert variant="warning" title="Chain read warning">
+          {chainError}
+        </Alert>
+      ) : null}
+
+      {chainMessage ? (
+        <Alert
+          variant={chainMessage.startsWith("Submitted") ? "info" : "warning"}
+          title={chainMessage.startsWith("Submitted") ? "Transaction sent" : "Execution note"}
+        >
+          {chainMessage}
+        </Alert>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Summary
-          label="Treasury"
-          value={`${money(state.config.treasuryUsdc)} USDC`}
-          hint="DAO-owned"
-        />
-        <Summary
-          label="Active members"
-          value={String(activeMembers.length)}
-          hint={`${state.members.length - activeMembers.length} removed`}
-        />
-        <Summary
-          label="Period spend"
-          value={`${money(state.capUsage.periodSpent)} / ${money(state.config.perPeriodCap)}`}
-          hint={`${usage}% of cap`}
-        />
+        <Summary label="Treasury" value={`${money(state.config.treasuryUsdc)} USDC`} />
+        <Summary label="Members" value={`${activeMembers.length} active`} />
         <Summary
           label="Agent"
-          value={state.config.agentPaused ? "paused" : "active"}
-          hint={shortHash(state.config.agentAddress, 8, 4)}
+          value={state.config.agentPaused ? "Paused" : "Active"}
+          tone={state.config.agentPaused ? "warning" : "success"}
         />
+        <Summary label="Period spend" value={`${usage}% of cap`} progress={usage} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
@@ -500,6 +716,21 @@ export default function DaoConsolePage() {
                 }
               : previous,
           );
+          if (current.call && isDaoChainConfigured && !result.simulated) {
+            const auth: AdminAuth = {
+              nonce: BigInt(current.request.nonce),
+              expiry: BigInt(current.request.expiry),
+              signature: result.signature,
+            };
+            void submitCall(current.plan, current.call, auth);
+            return;
+          }
+          if (current.call && isDaoChainConfigured && result.simulated) {
+            setChainMessage(
+              "A simulated signature cannot authorize an on-chain call; connect the admin wallet and sign.",
+            );
+            return;
+          }
           void runPlan(
             current.plan,
             result.simulated
@@ -624,22 +855,40 @@ function applyPlan(
 function Summary({
   label,
   value,
-  hint,
+  tone,
+  progress,
 }: {
   label: string;
   value: string;
-  hint: string;
+  tone?: "success" | "warning";
+  progress?: number;
 }) {
   return (
-    <Card>
+    <Card className="bg-gradient-to-br from-white to-[hsl(46_60%_97%)]">
       <CardContent className="p-4">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+          {tone ? (
+            <span
+              className={
+                tone === "success"
+                  ? "h-1.5 w-1.5 rounded-full bg-emerald-500"
+                  : "h-1.5 w-1.5 rounded-full bg-amber-500"
+              }
+            />
+          ) : null}
           {label}
         </div>
-        <div className="mt-1 text-lg font-semibold tracking-tight">{value}</div>
-        <div className="truncate text-xs text-muted-foreground" title={hint}>
-          {hint}
+        <div className="mt-1.5 text-lg font-semibold tracking-tight">
+          {value}
         </div>
+        {typeof progress === "number" ? (
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[hsl(45_96%_55%)] to-[hsl(36_92%_52%)]"
+              style={{ width: `${Math.min(100, progress)}%` }}
+            />
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

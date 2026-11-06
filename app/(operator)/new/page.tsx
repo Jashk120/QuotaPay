@@ -31,6 +31,7 @@ import {
 import { money } from "@/lib/dao/format";
 import { DAO_CONSTANTS, createDaoState } from "@/lib/dao/seed";
 import { useDaoState } from "@/lib/dao/use-dao";
+import { config, isDaoChainConfigured } from "@/lib/config";
 import { useConnectedWallet } from "@/lib/wallet";
 
 const DEFAULT_PROMPT =
@@ -197,7 +198,7 @@ export default function NewDaoPage() {
             onChange={(event) => setPrompt(event.target.value)}
             rows={3}
             aria-label="DAO prompt"
-            className="w-full resize-none rounded-lg border border-input bg-background/60 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="w-full resize-none rounded-lg border border-input bg-white px-3 py-2 text-sm shadow-[inset_0_1px_2px_hsl(40_30%_20%/0.04)] outline-none focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring/40"
           />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => void interpret()} disabled={interpreting}>
@@ -209,10 +210,7 @@ export default function NewDaoPage() {
               Interpret config
             </Button>
             {interpreted ? (
-              <Badge variant="success">
-                parsed {money(Number(treasury))} treasury · {money(Number(perTx))}{" "}
-                cap
-              </Badge>
+              <Badge variant="success">config parsed</Badge>
             ) : null}
             {source ? (
               <Badge variant="outline" title="Config extractor">
@@ -282,7 +280,7 @@ export default function NewDaoPage() {
             </Field>
           </div>
 
-          <div className="rounded-lg border border-border/60 bg-secondary/20 p-3 text-xs text-muted-foreground">
+          <div className="rounded-xl border border-border/70 bg-secondary/40 p-3 text-xs text-muted-foreground">
             Membership is invite-only. Removing a member needs an admin signature;
             changing caps or the agent key needs a member vote.
           </div>
@@ -299,18 +297,28 @@ export default function NewDaoPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-2 rounded-lg border border-border/70 bg-background/50 p-3 text-sm">
+          <div className="grid gap-2 rounded-xl border border-border/70 bg-secondary/30 p-3 text-sm">
             <Row label="DAO" value={snapshot.name} />
             <Row label="Treasury" value={`${money(snapshot.treasuryUsdc)} USDC`} />
-            <Row label="Per-tx / period" value={`${money(snapshot.perTxCap)} / ${money(snapshot.perPeriodCap)}`} />
-            <Row label="Admin" value={address ?? DAO_CONSTANTS.ADMIN} mono />
-            <Row label="DaoCore" value={DAO_CONSTANTS.CORE} mono />
+            <details className="text-sm">
+              <summary className="cursor-pointer text-xs text-muted-foreground">
+                Deployment details
+              </summary>
+              <div className="mt-2 grid gap-2">
+                <Row
+                  label="Per-tx / period"
+                  value={`${money(snapshot.perTxCap)} / ${money(snapshot.perPeriodCap)}`}
+                />
+                <Row label="Admin" value={address ?? DAO_CONSTANTS.ADMIN} mono />
+                <Row label="DaoCore" value={DAO_CONSTANTS.CORE} mono />
+              </div>
+            </details>
           </div>
 
           <Button
             className="w-full"
             onClick={openSignature}
-            disabled={deploying || !name.trim()}
+            disabled={deploying || !name.trim() || isDaoChainConfigured}
             data-testid="dao-deploy"
           >
             {deploying ? (
@@ -321,13 +329,15 @@ export default function NewDaoPage() {
             Sign config &amp; deploy
           </Button>
           <p className="text-xs text-muted-foreground">
-            {isConnected
-              ? "Your wallet signs the config hash before the deploy."
-              : "No wallet connected — the DAO is created locally without a signature. Connect a wallet only when you deploy on-chain."}
+            {isDaoChainConfigured
+              ? "This console is bound to a deployed DaoCore, so a local create would be discarded on the next chain read."
+              : isConnected
+                ? "Your wallet signs the config hash before the deploy."
+                : "No wallet connected — the DAO is created locally without a signature. Connect a wallet only when you deploy on-chain."}
           </p>
 
           {deployStep >= 0 ? (
-            <div className="space-y-2 rounded-lg border border-border/60 bg-background/40 p-3">
+            <div className="space-y-2 rounded-xl border border-border/70 bg-secondary/30 p-3">
               {DEPLOY_STEPS.map((step, index) => {
                 const done = deployStep > index;
                 const active = deployStep === index;
@@ -352,10 +362,20 @@ export default function NewDaoPage() {
         </CardContent>
       </Card>
 
-      <Alert variant="warning" title="Replaces the local demo">
-        This writes a fresh DAO to this browser&apos;s localStorage. The previous
-        demo state is not recoverable except with “Reset demo”.
-      </Alert>
+      {isDaoChainConfigured ? (
+        <Alert variant="info" title="On-chain DAO configured">
+          This page creates a local demo DAO only. The console reads{" "}
+          <span className="font-mono">{config.daoCoreAddress}</span>. To create a
+          real DAO, deploy one with{" "}
+          <span className="font-mono">node scripts/deploy-dao.mjs</span> and point{" "}
+          <span className="font-mono">NEXT_PUBLIC_DAO_CORE</span> at it.
+        </Alert>
+      ) : (
+        <Alert variant="warning" title="Replaces the local demo">
+          This writes a fresh DAO to this browser&apos;s localStorage. The previous
+          demo state is not recoverable except with “Reset demo”.
+        </Alert>
+      )}
 
       <AdminSignatureDialog
         request={signingRequest}

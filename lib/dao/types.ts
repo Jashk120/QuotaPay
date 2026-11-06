@@ -89,6 +89,8 @@ export type MemberRole = "member" | "contributor" | "admin";
 
 export type Member = {
   id: string;
+  /** On-chain leaf index for a chain-backed DAO. */
+  index?: number;
   name: string;
   wallet: string;
   leaf: string;

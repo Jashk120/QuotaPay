@@ -8,7 +8,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { config } from "@/lib/config";
+import { config, isDaoChainConfigured } from "@/lib/config";
 import { shortHash } from "@/lib/dao/hash";
 import { useConnectedWallet } from "@/lib/wallet";
 
@@ -127,7 +127,7 @@ export function AdminSignatureDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4 backdrop-blur"
+      className="fixed inset-0 z-50 grid place-items-center bg-[hsl(40_20%_12%/0.28)] p-4 backdrop-blur-sm"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -163,27 +163,26 @@ export function AdminSignatureDialog({
             different one.
           </p>
 
-          <div className="grid gap-2 rounded-lg border border-border/70 bg-background/50 p-3 text-sm">
-            <Row label="daoCore" value={shortHash(request.daoCore, 12, 8)} mono />
-            <Row label="chainId" value={String(config.chainId)} />
-            <Row label="actionType" value={String(request.actionType)} />
-            <Row
-              label="paramsHash"
-              value={shortHash(request.paramsHash, 14, 8)}
-              mono
-            />
-            <Row label="nonce" value={String(request.nonce)} />
-            <Row
-              label="expiry"
-              value={new Date(request.expiry).toISOString().slice(0, 16) + "Z"}
-            />
-          </div>
-
-          <details className="rounded-lg border border-border/60 bg-background/40 p-3">
+          <details className="rounded-xl border border-border/70 bg-secondary/30 p-3">
             <summary className="cursor-pointer text-xs text-muted-foreground">
-              Typed data
+              Authorization details
             </summary>
-            <pre className="mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed text-muted-foreground">
+            <div className="mt-2 grid gap-2 text-sm">
+              <Row label="daoCore" value={shortHash(request.daoCore, 12, 8)} mono />
+              <Row label="chainId" value={String(config.chainId)} />
+              <Row label="actionType" value={String(request.actionType)} />
+              <Row
+                label="paramsHash"
+                value={shortHash(request.paramsHash, 14, 8)}
+                mono
+              />
+              <Row label="nonce" value={String(request.nonce)} />
+              <Row
+                label="expiry"
+                value={new Date(request.expiry).toISOString().slice(0, 16) + "Z"}
+              />
+            </div>
+            <pre className="mt-3 overflow-x-auto border-t border-border/50 pt-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
               {JSON.stringify(typedData, null, 2)}
             </pre>
           </details>
@@ -222,12 +221,12 @@ export function AdminSignatureDialog({
             </Button>
           </div>
 
-          <div className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-100">
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              UI-only build: the signature is real EIP-712 typed data, but no
-              contract verifies it yet. The simulated option keeps the demo
-              offline.
+              {isDaoChainConfigured
+                ? "DaoCore verifies this signature against its admin key and nonce before the call executes. The simulated option cannot authorize an on-chain write."
+                : "Local simulation: the signature is real EIP-712 typed data, but no contract verifies it until NEXT_PUBLIC_DAO_CORE is set."}
             </span>
           </div>
         </CardContent>
