@@ -30,6 +30,7 @@ export function emptyDaoState(core = ""): DaoState {
     proposals: [],
     assets: [],
     events: [],
+    transactions: [],
     policy: [],
     capUsage: { periodSpent: 0, membersAdded: 0 },
   };

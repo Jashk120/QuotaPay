@@ -14,6 +14,7 @@ import type {
   DaoAsset,
   DaoEvent,
   DaoState,
+  DaoTransaction,
   Member,
   MemberRole,
   OraclePrice,
@@ -22,7 +23,7 @@ import type {
   Proposal,
 } from "./types";
 import { readChainlinkUsdcUsd } from "./oracle";
-import { daoNameFromId } from "./factory";
+import { DAO_CREATED, daoNameFromId } from "./factory";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 export const ZERO_HASH = `0x${"0".repeat(64)}` as Hex;
@@ -46,6 +47,55 @@ const ASSET_ALLOWED = parseAbiItem(
 );
 const DAO_INITIALIZED = parseAbiItem(
   "event DaoInitialized(bytes32 indexed daoId, address indexed admin)",
+);
+const ROLE_SET = parseAbiItem(
+  "event RoleSet(uint256 indexed index, uint8 role)",
+);
+const PROPOSAL_CREATED = parseAbiItem(
+  "event ProposalCreated(uint256 indexed proposalId, address indexed target, bytes4 selector, bytes32 paramsHash, bytes32 snapshotRoot, uint64 deadline)",
+);
+const VOTE_CAST = parseAbiItem(
+  "event VoteCast(uint256 indexed proposalId, bool support, uint256 voteNullifier)",
+);
+const PROPOSAL_EXECUTED = parseAbiItem(
+  "event ProposalExecuted(uint256 indexed proposalId, bytes32 actionHash)",
+);
+const SPENT = parseAbiItem(
+  "event Spent(address indexed token, address indexed to, uint256 amount, uint256 spentThisPeriod)",
+);
+const DEPOSITED = parseAbiItem(
+  "event Deposited(address indexed from, uint256 amount)",
+);
+const TOKEN_CAP_SET = parseAbiItem(
+  "event TokenCapSet(address indexed token, bool allowed, uint256 perTx, uint256 perPeriod, uint64 periodLength)",
+);
+const ADMIN_SET = parseAbiItem(
+  "event AdminSet(address indexed previous, address indexed next)",
+);
+const AGENT_SIGNER_SET = parseAbiItem(
+  "event AgentSignerSet(address indexed previous, address indexed next)",
+);
+const VOTE_PAYMASTER_SET = parseAbiItem(
+  "event VotePaymasterSet(address indexed paymaster)",
+);
+const PAUSED_SET = parseAbiItem("event PausedSet(bool paused)");
+const ASSET_CAP_SET = parseAbiItem(
+  "event AssetCapSet(bytes32 indexed assetId, uint256 cap)",
+);
+const ACQUIRED = parseAbiItem(
+  "event Acquired(bytes32 indexed assetId, uint256 amount, uint256 cost)",
+);
+const DISPOSED = parseAbiItem(
+  "event Disposed(bytes32 indexed assetId, uint256 amount, address indexed to)",
+);
+const TOKEN_TRANSFER = parseAbiItem(
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+);
+const FUNDED = parseAbiItem(
+  "event Funded(address indexed dao, address indexed caller, uint256 amountIn, uint256 amountOut)",
+);
+const SWAPPED = parseAbiItem(
+  "event Swapped(bytes32 indexed poolId, address indexed caller, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut)",
 );
 
 const ROLE_NAMES: MemberRole[] = ["member", "contributor", "admin"];
@@ -202,6 +252,7 @@ export type ChainSnapshot = {
   proposals: ChainProposal[];
   assets: ChainAsset[];
   events: ChainEvent[];
+  transactions: DaoTransaction[];
   policy: PolicyRow[];
   token: ChainToken;
   memberPolicy: {
@@ -526,7 +577,7 @@ export async function readChainSnapshot(
     (row): row is PolicyRow => row !== null,
   );
 
-  // ---- events + creation time --------------------------------------------
+  // ---- logs: agent actions + the full on-chain activity stream -------------
   const [actionLogs, initLogs] = await Promise.all([
     optional(
       () =>
@@ -550,12 +601,248 @@ export async function readChainSnapshot(
     ),
   ]);
 
+  const [
+    roleLogs,
+    proposalLogs,
+    voteLogs,
+    executedLogs,
+    spentLogs,
+    depositLogs,
+    capLogs,
+    adminLogs,
+    signerLogs,
+    paymasterLogs,
+    pausedLogs,
+    assetAllowedLogs,
+    assetCapLogs,
+    acquiredLogs,
+    disposedLogs,
+    inboundTransfers,
+    outboundTransfers,
+    fundedLogs,
+    swappedLogs,
+    createdLogs,
+  ] = await Promise.all([
+    optional(
+      () => client.getLogs({ address: core, event: ROLE_SET, fromBlock: 0n }),
+      warnings,
+      "RoleSet logs",
+    ),
+    optional(
+      () =>
+        client.getLogs({ address: core, event: PROPOSAL_CREATED, fromBlock: 0n }),
+      warnings,
+      "ProposalCreated logs",
+    ),
+    optional(
+      () => client.getLogs({ address: core, event: VOTE_CAST, fromBlock: 0n }),
+      warnings,
+      "VoteCast logs",
+    ),
+    optional(
+      () =>
+        client.getLogs({
+          address: core,
+          event: PROPOSAL_EXECUTED,
+          fromBlock: 0n,
+        }),
+      warnings,
+      "ProposalExecuted logs",
+    ),
+    optional(
+      () => client.getLogs({ address: core, event: SPENT, fromBlock: 0n }),
+      warnings,
+      "Spent logs",
+    ),
+    optional(
+      () => client.getLogs({ address: core, event: DEPOSITED, fromBlock: 0n }),
+      warnings,
+      "Deposited logs",
+    ),
+    optional(
+      () => client.getLogs({ address: core, event: TOKEN_CAP_SET, fromBlock: 0n }),
+      warnings,
+      "TokenCapSet logs",
+    ),
+    optional(
+      () => client.getLogs({ address: core, event: ADMIN_SET, fromBlock: 0n }),
+      warnings,
+      "AdminSet logs",
+    ),
+    optional(
+      () =>
+        client.getLogs({
+          address: agentAccount as Address,
+          event: AGENT_SIGNER_SET,
+          fromBlock: 0n,
+        }),
+      warnings,
+      "AgentSignerSet logs",
+    ),
+    optional(
+      () =>
+        client.getLogs({
+          address: core,
+          event: VOTE_PAYMASTER_SET,
+          fromBlock: 0n,
+        }),
+      warnings,
+      "VotePaymasterSet logs",
+    ),
+    optional(
+      () =>
+        client.getLogs({
+          address: agentAccount as Address,
+          event: PAUSED_SET,
+          fromBlock: 0n,
+        }),
+      warnings,
+      "PausedSet logs",
+    ),
+    assetModule
+      ? optional(
+          () =>
+            client.getLogs({
+              address: assetModule,
+              event: ASSET_ALLOWED,
+              fromBlock: 0n,
+            }),
+          warnings,
+          "AssetAllowed logs",
+        )
+      : Promise.resolve(null),
+    assetModule
+      ? optional(
+          () =>
+            client.getLogs({
+              address: assetModule,
+              event: ASSET_CAP_SET,
+              fromBlock: 0n,
+            }),
+          warnings,
+          "AssetCapSet logs",
+        )
+      : Promise.resolve(null),
+    assetModule
+      ? optional(
+          () =>
+            client.getLogs({
+              address: assetModule,
+              event: ACQUIRED,
+              fromBlock: 0n,
+            }),
+          warnings,
+          "Acquired logs",
+        )
+      : Promise.resolve(null),
+    assetModule
+      ? optional(
+          () =>
+            client.getLogs({
+              address: assetModule,
+              event: DISPOSED,
+              fromBlock: 0n,
+            }),
+          warnings,
+          "Disposed logs",
+        )
+      : Promise.resolve(null),
+    tokenAddress
+      ? optional(
+          () =>
+            client.getLogs({
+              address: tokenAddress,
+              event: TOKEN_TRANSFER,
+              args: { to: core },
+              fromBlock: 0n,
+            }),
+          warnings,
+          "USDC inbound transfers",
+        )
+      : Promise.resolve(null),
+    tokenAddress
+      ? optional(
+          () =>
+            client.getLogs({
+              address: tokenAddress,
+              event: TOKEN_TRANSFER,
+              args: { from: core },
+              fromBlock: 0n,
+            }),
+          warnings,
+          "USDC outbound transfers",
+        )
+      : Promise.resolve(null),
+    config.treasuryFundHelper
+      ? optional(
+          () =>
+            client.getLogs({
+              address: config.treasuryFundHelper as Address,
+              event: FUNDED,
+              args: { dao: core },
+              fromBlock: 0n,
+            }),
+          warnings,
+          "TreasuryFundHelper.Funded logs",
+        )
+      : Promise.resolve(null),
+    swapModule
+      ? optional(
+          () =>
+            client.getLogs({
+              address: swapModule,
+              event: SWAPPED,
+              fromBlock: 0n,
+            }),
+          warnings,
+          "DaoSwapModule.Swapped logs",
+        )
+      : Promise.resolve(null),
+    config.daoFactoryAddress
+      ? optional(
+          () =>
+            client.getLogs({
+              address: config.daoFactoryAddress as Address,
+              event: DAO_CREATED,
+              args: { daoCore: core },
+              fromBlock: 0n,
+            }),
+          warnings,
+          "DaoFactory.DaoCreated logs",
+        )
+      : Promise.resolve(null),
+  ]);
+
+  const allLogs = [
+    ...(actionLogs ?? []),
+    ...(initLogs ?? []),
+    ...(addedLogs ?? []),
+    ...(removedLogs ?? []),
+    ...(roleLogs ?? []),
+    ...(proposalLogs ?? []),
+    ...(voteLogs ?? []),
+    ...(executedLogs ?? []),
+    ...(spentLogs ?? []),
+    ...(depositLogs ?? []),
+    ...(capLogs ?? []),
+    ...(adminLogs ?? []),
+    ...(signerLogs ?? []),
+    ...(paymasterLogs ?? []),
+    ...(pausedLogs ?? []),
+    ...(assetAllowedLogs ?? []),
+    ...(assetCapLogs ?? []),
+    ...(acquiredLogs ?? []),
+    ...(disposedLogs ?? []),
+    ...(inboundTransfers ?? []),
+    ...(outboundTransfers ?? []),
+    ...(fundedLogs ?? []),
+    ...(swappedLogs ?? []),
+    ...(createdLogs ?? []),
+  ];
+
   const blockTimes = new Map<bigint, number>();
   const uniqueBlocks = Array.from(
-    new Set([
-      ...(actionLogs ?? []).map((log) => log.blockNumber),
-      ...(initLogs ?? []).map((log) => log.blockNumber),
-    ]),
+    new Set(allLogs.map((log) => log.blockNumber)),
   );
   await Promise.all(
     uniqueBlocks.map(async (blockNumber) => {
@@ -568,6 +855,18 @@ export async function readChainSnapshot(
       if (block) blockTimes.set(blockNumber, Number(block.timestamp) * 1000);
     }),
   );
+
+  const at = (log: { blockNumber?: bigint | null }) =>
+    log.blockNumber != null ? (blockTimes.get(log.blockNumber) ?? 0) : 0;
+  const txId = (
+    prefix: string,
+    log: { transactionHash?: Hex | null; logIndex?: number | null },
+  ) => `${prefix}-${log.transactionHash}-${log.logIndex}`;
+  const hashOf = (log: { transactionHash?: Hex | null }) =>
+    (log.transactionHash as Hex) ?? ZERO_HASH;
+  const blockOf = (log: { blockNumber?: bigint | null }) =>
+    Number(log.blockNumber ?? 0n);
+  const usdc = (value: bigint) => Number(formatUnits(value, decimals));
 
   const events: ChainEvent[] = (actionLogs ?? []).map((log) => {
     const code = Number(log.args.actionType ?? 0);
@@ -583,6 +882,354 @@ export async function readChainSnapshot(
       txHash: (log.transactionHash as Hex) ?? ZERO_HASH,
     };
   });
+
+  const transactions: DaoTransaction[] = [];
+
+  for (const log of createdLogs ?? []) {
+    transactions.push({
+      id: txId("created", log),
+      at: at(log),
+      kind: "create",
+      title: "DAO deployed",
+      detail: `${formatUnits(log.args.funding ?? 0n, 18)} ETH funding · admin ${shortHex(
+        (log.args.admin as string) ?? "",
+      )}`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  if ((createdLogs ?? []).length === 0) {
+    for (const log of initLogs ?? []) {
+      transactions.push({
+        id: txId("init", log),
+        at: at(log),
+        kind: "create",
+        title: "DAO initialized",
+        detail: `daoId ${shortHex((log.args.daoId as string) ?? "", 10, 6)}`,
+        txHash: hashOf(log),
+        block: blockOf(log),
+      });
+    }
+  }
+
+  for (const log of addedLogs ?? []) {
+    transactions.push({
+      id: txId("member-add", log),
+      at: at(log),
+      kind: "member_add",
+      title: "Member added",
+      detail: `index ${log.args.index?.toString() ?? "?"} · commitment ${shortHex(
+        `0x${(log.args.commitment ?? 0n).toString(16).padStart(64, "0")}`,
+        10,
+        6,
+      )}`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of removedLogs ?? []) {
+    transactions.push({
+      id: txId("member-remove", log),
+      at: at(log),
+      kind: "member_remove",
+      title: "Member removed",
+      detail: `index ${log.args.index?.toString() ?? "?"}`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of roleLogs ?? []) {
+    transactions.push({
+      id: txId("role", log),
+      at: at(log),
+      kind: "role",
+      title: "Role set",
+      detail: `member #${log.args.index?.toString() ?? "?"} → ${
+        ROLE_NAMES[Number(log.args.role ?? 0)] ?? "member"
+      }`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of proposalLogs ?? []) {
+    transactions.push({
+      id: txId("proposal", log),
+      at: at(log),
+      kind: "proposal",
+      title: `Proposal #${log.args.proposalId?.toString() ?? "?"} created`,
+      detail: `${shortHex((log.args.target as string) ?? "")} · ${
+        (log.args.selector as string) ?? ""
+      }`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of voteLogs ?? []) {
+    transactions.push({
+      id: txId("vote", log),
+      at: at(log),
+      kind: "vote",
+      title: `Vote on #${log.args.proposalId?.toString() ?? "?"}`,
+      detail: log.args.support ? "for" : "against",
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of executedLogs ?? []) {
+    transactions.push({
+      id: txId("executed", log),
+      at: at(log),
+      kind: "proposal_executed",
+      title: `Proposal #${log.args.proposalId?.toString() ?? "?"} executed`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of spentLogs ?? []) {
+    const amount = usdc(log.args.amount ?? 0n);
+    transactions.push({
+      id: txId("spent", log),
+      at: at(log),
+      kind: "spend",
+      title: "Payout",
+      detail: `to ${shortHex((log.args.to as string) ?? "")}`,
+      amount,
+      unit: "USDC",
+      direction: "out",
+      token: (log.args.token as string) ?? undefined,
+      counterparty: (log.args.to as string) ?? undefined,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of depositLogs ?? []) {
+    const amount = Number(formatUnits(log.args.amount ?? 0n, 18));
+    transactions.push({
+      id: txId("deposit", log),
+      at: at(log),
+      kind: "deposit",
+      title: "Native deposit",
+      detail: `${amount} ETH from ${shortHex((log.args.from as string) ?? "")}`,
+      amount,
+      unit: "ETH",
+      direction: "in",
+      counterparty: (log.args.from as string) ?? undefined,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of capLogs ?? []) {
+    transactions.push({
+      id: txId("cap", log),
+      at: at(log),
+      kind: "token_cap",
+      title: "Token cap set",
+      detail: `${shortHex((log.args.token as string) ?? "")} · ${usdc(
+        log.args.perTx ?? 0n,
+      )}/${usdc(log.args.perPeriod ?? 0n)} USDC per ${
+        log.args.periodLength?.toString() ?? "?"
+      }s`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of adminLogs ?? []) {
+    transactions.push({
+      id: txId("admin", log),
+      at: at(log),
+      kind: "admin",
+      title: "Admin changed",
+      detail: `${shortHex((log.args.previous as string) ?? "")} → ${shortHex(
+        (log.args.next as string) ?? "",
+      )}`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of signerLogs ?? []) {
+    transactions.push({
+      id: txId("signer", log),
+      at: at(log),
+      kind: "agent_signer",
+      title: "Agent signer changed",
+      detail: `${shortHex((log.args.previous as string) ?? "")} → ${shortHex(
+        (log.args.next as string) ?? "",
+      )}`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of paymasterLogs ?? []) {
+    transactions.push({
+      id: txId("paymaster", log),
+      at: at(log),
+      kind: "vote_paymaster",
+      title: "Vote paymaster set",
+      detail: shortHex((log.args.paymaster as string) ?? ""),
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of pausedLogs ?? []) {
+    transactions.push({
+      id: txId("pause", log),
+      at: at(log),
+      kind: "pause",
+      title: log.args.paused ? "Agent paused" : "Agent resumed",
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of assetAllowedLogs ?? []) {
+    transactions.push({
+      id: txId("asset-allowed", log),
+      at: at(log),
+      kind: "asset_allowed",
+      title: "Asset allowlisted",
+      detail: `${shortHex((log.args.assetId as string) ?? "")} · ${usdc(
+        log.args.unitPrice ?? 0n,
+      )}/${usdc(log.args.cap ?? 0n)} USDC`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of assetCapLogs ?? []) {
+    transactions.push({
+      id: txId("asset-cap", log),
+      at: at(log),
+      kind: "asset_cap",
+      title: "Asset cap set",
+      detail: `${shortHex((log.args.assetId as string) ?? "")} · ${usdc(
+        log.args.cap ?? 0n,
+      )} USDC`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of acquiredLogs ?? []) {
+    transactions.push({
+      id: txId("acquired", log),
+      at: at(log),
+      kind: "acquired",
+      title: "Asset acquired",
+      detail: `${shortHex((log.args.assetId as string) ?? "")} · ${
+        log.args.amount?.toString() ?? "?"
+      } units · ${usdc(log.args.cost ?? 0n)} USDC`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of disposedLogs ?? []) {
+    transactions.push({
+      id: txId("disposed", log),
+      at: at(log),
+      kind: "disposed",
+      title: "Asset disposed",
+      detail: `${shortHex((log.args.assetId as string) ?? "")} · ${
+        log.args.amount?.toString() ?? "?"
+      } units → ${shortHex((log.args.to as string) ?? "")}`,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of fundedLogs ?? []) {
+    const amount = usdc(log.args.amountOut ?? 0n);
+    transactions.push({
+      id: txId("funded", log),
+      at: at(log),
+      kind: "funding",
+      title: "Treasury funded via Uniswap",
+      detail: `${formatUnits(log.args.amountIn ?? 0n, 18)} ETH → ${amount.toFixed(
+        2,
+      )} USDC`,
+      amount,
+      unit: "USDC",
+      direction: "in",
+      counterparty: (log.args.caller as string) ?? undefined,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of swappedLogs ?? []) {
+    transactions.push({
+      id: txId("swapped", log),
+      at: at(log),
+      kind: "swap",
+      title: "Treasury swap",
+      detail: `${shortHex((log.args.tokenIn as string) ?? "")} → ${shortHex(
+        (log.args.tokenOut as string) ?? "",
+      )}`,
+      amount: usdc(log.args.amountOut ?? 0n),
+      unit: "USDC",
+      direction: "in",
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  const seenTransfers = new Set<string>();
+  for (const log of inboundTransfers ?? []) {
+    const key = `${log.transactionHash}-${log.logIndex}`;
+    if (seenTransfers.has(key)) continue;
+    seenTransfers.add(key);
+    const amount = usdc(log.args.value ?? 0n);
+    transactions.push({
+      id: txId("transfer-in", log),
+      at: at(log),
+      kind: "transfer_in",
+      title: "USDC received",
+      detail: `from ${shortHex((log.args.from as string) ?? "")}`,
+      amount,
+      unit: "USDC",
+      direction: "in",
+      token: tokenAddress ?? undefined,
+      counterparty: (log.args.from as string) ?? undefined,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  for (const log of outboundTransfers ?? []) {
+    const key = `${log.transactionHash}-${log.logIndex}`;
+    if (seenTransfers.has(key)) continue;
+    seenTransfers.add(key);
+    const amount = usdc(log.args.value ?? 0n);
+    transactions.push({
+      id: txId("transfer-out", log),
+      at: at(log),
+      kind: "transfer_out",
+      title: "USDC sent",
+      detail: `to ${shortHex((log.args.to as string) ?? "")}`,
+      amount,
+      unit: "USDC",
+      direction: "out",
+      token: tokenAddress ?? undefined,
+      counterparty: (log.args.to as string) ?? undefined,
+      txHash: hashOf(log),
+      block: blockOf(log),
+    });
+  }
+
+  transactions.sort((a, b) => b.at - a.at || b.block - a.block);
 
   let createdAt = 0;
   if (initLogs?.[0]?.blockNumber != null) {
@@ -608,6 +1255,7 @@ export async function readChainSnapshot(
     proposals,
     assets,
     events: events.reverse(),
+    transactions,
     policy,
     token,
     memberPolicy: {
@@ -858,6 +1506,7 @@ export function snapshotToDaoState(
     proposals,
     assets,
     events,
+    transactions: snapshot.transactions,
     policy: snapshot.policy,
     oracle: snapshot.oracle,
     capUsage: {

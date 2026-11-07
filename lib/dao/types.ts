@@ -149,6 +149,51 @@ export type DaoEvent = {
   simulated: boolean;
 };
 
+/**
+ * A real on-chain log, not an agent plan. The console shows these next to the
+ * agent's `ActionExecuted` rows so funding, transfers, membership and votes are
+ * visible even when the agent did not initiate them.
+ */
+export type DaoTransactionKind =
+  | "create"
+  | "deposit"
+  | "funding"
+  | "transfer_in"
+  | "transfer_out"
+  | "spend"
+  | "member_add"
+  | "member_remove"
+  | "role"
+  | "proposal"
+  | "vote"
+  | "proposal_executed"
+  | "asset_allowed"
+  | "asset_cap"
+  | "acquired"
+  | "disposed"
+  | "token_cap"
+  | "admin"
+  | "agent_signer"
+  | "vote_paymaster"
+  | "pause"
+  | "swap";
+
+export type DaoTransaction = {
+  id: string;
+  at: number;
+  kind: DaoTransactionKind;
+  title: string;
+  detail?: string;
+  /** Whole units. USDC unless the title says otherwise. */
+  amount?: number;
+  unit?: "USDC" | "ETH";
+  direction?: "in" | "out";
+  token?: string;
+  counterparty?: string;
+  txHash: string;
+  block: number;
+};
+
 export type PolicyRow = {
   target: string;
   selector: string;
@@ -173,6 +218,7 @@ export type DaoState = {
   proposals: Proposal[];
   assets: DaoAsset[];
   events: DaoEvent[];
+  transactions: DaoTransaction[];
   policy: PolicyRow[];
   oracle?: OraclePrice;
   capUsage: {
