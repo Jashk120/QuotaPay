@@ -217,6 +217,13 @@ export default function DaoConsolePage() {
               refusal: message.payload.refusal as Refusal,
               at,
             });
+          } else if (typeof message.payload.text === "string") {
+            nextItems.push({
+              id: message.id,
+              role: "agent",
+              text: message.payload.text,
+              at,
+            });
           }
         }
         setItems(nextItems);
@@ -364,6 +371,27 @@ export default function DaoConsolePage() {
       ]);
       void persistMessage("user", { text: prompt });
       void persistMessage("agent", { refusal: reply });
+      return;
+    }
+
+    if (reply.kind === "message") {
+      setItems((previous) => [
+        ...previous,
+        userItem,
+        { id: rid("msg"), role: "agent", text: reply.text, at: Date.now() },
+      ]);
+      void persistMessage("user", { text: prompt });
+      void persistMessage("agent", { text: reply.text });
+      if (activeConversationId) {
+        setConversations((previous) =>
+          previous.map((conversation) =>
+            conversation.id === activeConversationId &&
+            conversation.title === "New chat"
+              ? { ...conversation, title: prompt.slice(0, 60) }
+              : conversation,
+          ),
+        );
+      }
       return;
     }
 

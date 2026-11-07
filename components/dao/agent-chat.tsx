@@ -150,6 +150,19 @@ export function AgentChat({
               );
             }
 
+            if (item.text && !item.planId) {
+              return (
+                <div key={item.id} className="flex gap-2">
+                  <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/15 ring-1 ring-primary/30">
+                    <Bot className="h-3.5 w-3.5 text-amber-700" />
+                  </div>
+                  <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white px-3.5 py-2.5 text-sm text-foreground shadow-[0_1px_2px_hsl(40_30%_20%/0.06)] ring-1 ring-border/70">
+                    {item.text}
+                  </div>
+                </div>
+              );
+            }
+
             const plan = item.planId ? plans[item.planId] : undefined;
             if (!plan) return null;
             return (

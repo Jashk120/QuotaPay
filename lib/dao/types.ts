@@ -65,8 +65,16 @@ export type Refusal = {
   prompt: string;
 };
 
+/** Plain conversational reply: no plan, no transaction, nothing to authorize. */
+export type AgentMessage = {
+  kind: "message";
+  text: string;
+  prompt: string;
+};
+
 export type AgentReply =
   | { kind: "plan"; plan: Plan }
+  | AgentMessage
   | Refusal;
 
 export type DaoConfig = {

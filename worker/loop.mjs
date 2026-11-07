@@ -76,6 +76,10 @@ export async function runLoop(intent, state, opts = {}) {
         trace.push({ phase: "reason", refusal: reply.title, reason: reply.reason });
         return { status: "refused", trace, reply };
       }
+      if (reply.kind === "message") {
+        trace.push({ phase: "reason", message: reply.text });
+        return { status: "done", trace, reply, note: "conversational reply, no skill" };
+      }
       const plan = reply.plan;
       trace.push({ phase: "reason", plan: plan.title, action: plan.action, tier: plan.tier });
       const mapped = ACTION_TO_SKILL[plan.action];

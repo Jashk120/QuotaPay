@@ -231,3 +231,19 @@ test("falls back to a read-only summary", () => {
   assert.equal(reply.plan.tier, 0);
   assert.match(reply.plan.summary, /5,000/);
 });
+
+test("answers chitchat conversationally instead of building a plan", () => {
+  for (const prompt of ["hi", "Hi!", "hello", "hey", "thanks", "bye", "who are you"]) {
+    const reply = parsePrompt(prompt, state());
+    assert.equal(reply.kind, "message", prompt);
+    assert.ok(reply.text.length > 10, prompt);
+  }
+  // Greetings with an action still go through the policy engine.
+  const mixed = parsePrompt("hi, invite Priya", state());
+  assert.equal(mixed.kind, "plan");
+  assert.equal(mixed.plan.action, "add_members");
+  // Greetings are answered even while the agent is paused.
+  const paused = state();
+  paused.config.agentPaused = true;
+  assert.equal(parsePrompt("hi", paused).kind, "message");
+});
