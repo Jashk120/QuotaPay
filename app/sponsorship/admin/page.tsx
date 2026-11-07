@@ -62,7 +62,7 @@ function nowSeconds() {
 
 export default function AdminPage() {
   const { address: admin, connect } = useConnectedWallet();
-  const { mutateAsync: writeContract } = useWriteContract();
+  const { writeContractAsync: writeContract } = useWriteContract();
   const { fetch: anonFetch } = useAnonRpc();
 
   const [paymaster, setPaymaster] = useState("");

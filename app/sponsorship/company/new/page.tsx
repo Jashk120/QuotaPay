@@ -53,7 +53,7 @@ function bigintOr(value: string, fallback: bigint) {
 
 export default function NewCompanyPage() {
   const { address: connected, connect } = useConnectedWallet();
-  const { mutateAsync: writeContract } = useWriteContract();
+  const { writeContractAsync: writeContract } = useWriteContract();
 
   const [companyId, setCompanyId] = useState("acme");
   const [admin, setAdmin] = useState("");
