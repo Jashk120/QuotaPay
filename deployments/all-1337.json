@@ -1,0 +1,29 @@
+{
+  "chainId": 1337,
+  "rpc": "https://altmempool.forshtat.com",
+  "deployer": "0x348836a9b164f241945205B5a92f496BB8C3c1d8",
+  "coreFactory": "0x5a98ce1de5ccaebeec0dfa5b1af2b84bdabd4f9f",
+  "accountFactory": "0xfbb2d98b94858a57dd811ebdca580dace2afa09d",
+  "moduleFactory": "0xb96f1e529916936192c23ac5806d601f0da7c65e",
+  "swapModuleFactory": "0x0000000000000000000000000000000000000000",
+  "factory": "0xeabd037a78f3cb1aa616e1e8951f31958a67e368",
+  "discoveryFactories": [
+    "0xeabd037a78f3cb1aa616e1e8951f31958a67e368",
+    "0xefa565c99edaa3b02722525a95cbc9c9148a61fc"
+  ],
+  "usdc": "0xf5a344dba67542f633c16eb011b45de5b6cdf8a0",
+  "sharedGasPaymaster": "0x4dbdd9d1ae80b82d19b57f516c03d9a5ac5e8e9b",
+  "paymasterFundingWei": "20000000000000000",
+  "paymasterStakeWei": "11000000000000000",
+  "companyFactory": null,
+  "demo": {
+    "name": "Demo DAO",
+    "daoId": "0x44656d6f2044414f000000000000000000000000000000000000000000000000",
+    "daoCore": "0x039Dd8B71b4b4AB2E442BED45fc6c6BE6449a52e",
+    "agentAccount": "0x7C3993D59988E90c66EF04b406f44d3118a9fD3B",
+    "assetModule": "0x97886aE0583A08BD668DdAAac9c0d26eA626a6c8",
+    "agentSigner": "0xB5Db9D0A3cE6D5515cf7f32764C6477995d5225C",
+    "fundingWei": "20000000000000000"
+  },
+  "deployedAt": "2026-11-07T00:40:25.293Z"
+}
