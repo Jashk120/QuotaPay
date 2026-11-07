@@ -214,37 +214,65 @@ export default function NewDaoPage() {
               },
             ]
           : [];
+      const daoArgs = [
+        {
+          daoId,
+          admin: address,
+          agentSigner: signerJson.address as `0x${string}`,
+          frameEnforced: false,
+          memberPeriodLength: 2_592_000,
+          addMemberLimit: Number(rateLimit) || 1,
+          votePeriod: BigInt((Number(windowHours) || 1) * 3600),
+          quorumBps: 5_000,
+        },
+        [],
+        tokenCaps,
+        [],
+      ] as const;
+
+      // createDao deploys three contracts (~56.7M measured 2026-11-07) against
+      // a 60M block limit, so a hardcoded limit starves or breaks as state
+      // drifts. Estimate at deploy time, add 10%, cap at the block limit.
+      const [estimate, latestBlock] = await Promise.all([
+        publicClient.estimateContractGas({
+          account: address as `0x${string}`,
+          address: factory,
+          abi: daoFactoryAbi,
+          functionName: "createDao",
+          args: [...daoArgs],
+          value: fundingWei,
+        }),
+        publicClient.getBlock({ blockTag: "latest" }),
+      ]);
+      const blockLimit = latestBlock.gasLimit;
+      let gasLimit = (estimate * 110n) / 100n;
+      let gasCapped = false;
+      if (gasLimit >= blockLimit) {
+        gasLimit = blockLimit - 500_000n;
+        gasCapped = true;
+      }
 
       const hash = await writeContractAsync({
         address: factory,
         abi: daoFactoryAbi,
         functionName: "createDao",
-        args: [
-          {
-            daoId,
-            admin: address,
-            agentSigner: signerJson.address as `0x${string}`,
-            frameEnforced: false,
-            memberPeriodLength: 2_592_000,
-            addMemberLimit: Number(rateLimit) || 1,
-            votePeriod: BigInt((Number(windowHours) || 1) * 3600),
-            quorumBps: 5_000,
-          },
-          [],
-          tokenCaps,
-          [],
-        ],
+        args: [...daoArgs],
         value: fundingWei,
-        // createDao deploys three contracts; the devnet estimate is ~54.7M.
-        // Set the limit explicitly so MetaMask does not fail its fee estimate.
-        gas: 56_000_000n,
+        gas: gasLimit,
         gasPrice: 2_000_000_000n,
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") {
+        const gasUsed = receipt.gasUsed.toString();
+        const starved =
+          receipt.gasUsed >= gasLimit
+            ? " It consumed the full gas limit, so it likely ran out of gas"
+            : gasCapped
+              ? ` The 10%-buffered estimate (${estimate.toString()}) did not fit the block limit (${blockLimit.toString()}), so the transaction was capped and may have been starved`
+              : "";
         throw new Error(
-          `Deployment reverted on-chain (${hash}). The name may already be taken, or the factory rejected the config.`,
+          `Deployment reverted on-chain (${hash}). Gas used ${gasUsed} of ${gasLimit.toString()} limit (estimate was ${estimate.toString()}).${starved ? `${starved};` : ""} Otherwise the name may already be taken, or the factory rejected the config.`,
         );
       }
       const createdEvent = parseEventLogs({
