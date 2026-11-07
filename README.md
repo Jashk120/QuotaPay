@@ -23,7 +23,32 @@ npm run dev
 
 Open http://localhost:3000.
 
-## Deploy to the devnet
+## Rebuild the DAO stack
+
+One command rebuilds every DAO contract and updates `.env.local`:
+
+```powershell
+npm run deploy:all
+```
+
+It deploys `DaoCoreFactory`, `AgentAccountFactory` (wallet-enabled),
+`AssetModuleFactory`, `DaoFactory`, `MockERC20` (USDC) and the
+`SharedDaoGasPaymaster`, then writes `deployments/all-1337.json`.
+
+Options:
+
+```powershell
+npm run deploy:all -- --demo            # also create a demo DAO
+npm run deploy:all -- --demo --zk       # + vote verifier/paymaster
+npm run deploy:all -- --company         # + CompanyFactory
+npm run deploy:all -- --dry-run         # compile + balance preflight only
+```
+
+Restart `npm run dev` afterwards so the new `NEXT_PUBLIC_*` addresses load.
+Use `--force` only if you want to attempt a deploy below the recommended
+balance.
+
+## Deploy the company sponsorship stack
 
 ```powershell
 npm run deploy

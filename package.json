@@ -10,6 +10,8 @@
     "compat": "node scripts/compat-probe.mjs",
     "codec": "node scripts/codec-check.mjs",
     "deploy": "node scripts/deploy.mjs",
+    "deploy:all": "node scripts/deploy-all.mjs",
+    "deploy:dao": "node scripts/deploy-dao.mjs",
     "smoke": "node scripts/smoke.mjs",
     "cancel:pending": "node scripts/cancel-pending.mjs",
     "zk:setup": "node scripts/zk-setup.mjs",
