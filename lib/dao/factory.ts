@@ -22,23 +22,39 @@ export type OnchainDao = {
   funding: bigint;
   block: bigint;
   txHash: Hex;
+  /** Factory that emitted DaoCreated (absent for the env fallback). */
+  factory?: Address;
 };
 
 /**
- * The DAO list comes from the factory's own `DaoCreated` logs — no local
- * registry. A production deployment would index these with a subgraph or a
- * log indexer; on the devnet, reading from block 0 is fine.
+ * The DAO list comes from factory `DaoCreated` logs — no local registry.
+ *
+ * Reads every factory in `config.daoFactories`, so DAOs created by an earlier
+ * factory deployment do not disappear after a redeploy. A production
+ * deployment would replace this with a subgraph or an on-chain registry.
  */
 export async function listOnchainDaos(
   client: PublicClient,
+  factories: readonly string[] = config.daoFactories,
 ): Promise<OnchainDao[]> {
-  if (!config.daoFactoryAddress) return [];
-  const logs = await client.getLogs({
-    address: config.daoFactoryAddress,
-    event: DAO_CREATED,
-    fromBlock: 0n,
-  });
-  return logs
+  if (!factories.length) return [];
+  const logSets = await Promise.all(
+    factories.map(async (factory) => {
+      try {
+        return await client.getLogs({
+          address: factory as Address,
+          event: DAO_CREATED,
+          fromBlock: 0n,
+        });
+      } catch {
+        return [];
+      }
+    }),
+  );
+
+  const seen = new Set<string>();
+  return logSets
+    .flat()
     .map((log) => ({
       id: log.args.daoCore as string,
       address: log.args.daoCore as Address,
@@ -48,8 +64,15 @@ export async function listOnchainDaos(
       funding: (log.args.funding as bigint | undefined) ?? 0n,
       block: log.blockNumber ?? 0n,
       txHash: log.transactionHash as Hex,
+      factory: log.address as Address,
     }))
-    .reverse();
+    .sort((a, b) => (a.block < b.block ? 1 : a.block > b.block ? -1 : 0))
+    .filter((row) => {
+      const key = row.address.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 /**

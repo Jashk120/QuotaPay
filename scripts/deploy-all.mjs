@@ -60,6 +60,7 @@ const withZk = args.has("--zk");
 const withCompany = args.has("--company");
 const force = args.has("--force");
 const dryRun = args.has("--dry-run");
+const freshDiscovery = args.has("--fresh");
 
 const PAYMASTER_FUND = parseEther(
   process.env.SHARED_PAYMASTER_FUND_ETH ?? "0.02",
@@ -402,7 +403,6 @@ async function main() {
       agentAccount: created.agentAccount,
       assetModule: created.assetModule,
       agentSigner,
-      agentKey,
       fundingWei: fund.toString(),
     };
 
@@ -464,8 +464,23 @@ async function main() {
     );
   }
 
+  // Keep earlier factories in the discovery list so a redeploy does not orphan
+  // the DAOs created by the previous stack. `--fresh` starts a clean list.
+  const previousFactories = freshDiscovery
+    ? []
+    : [
+        env.get("NEXT_PUBLIC_DAO_FACTORY") ?? "",
+        ...(env.get("NEXT_PUBLIC_DAO_FACTORIES") ?? "").split(","),
+      ]
+        .map((value) => value.trim())
+        .filter(Boolean);
+  const discoveryFactories = Array.from(
+    new Set([factory, ...previousFactories].filter(Boolean)),
+  );
+
   const envPatch = {
     NEXT_PUBLIC_DAO_FACTORY: factory,
+    NEXT_PUBLIC_DAO_FACTORIES: discoveryFactories.join(","),
     NEXT_PUBLIC_DAO_GAS_PAYMASTER: sharedGasPaymaster,
     NEXT_PUBLIC_USDC_ADDRESS: usdc,
     NEXT_PUBLIC_USDC_DECIMALS: "18",
@@ -495,6 +510,7 @@ async function main() {
     moduleFactory,
     swapModuleFactory,
     factory,
+    discoveryFactories,
     usdc,
     sharedGasPaymaster,
     paymasterFundingWei: PAYMASTER_FUND.toString(),

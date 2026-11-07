@@ -42,7 +42,11 @@ npm run deploy:all -- --demo            # also create a demo DAO
 npm run deploy:all -- --demo --zk       # + vote verifier/paymaster
 npm run deploy:all -- --company         # + CompanyFactory
 npm run deploy:all -- --dry-run         # compile + balance preflight only
+npm run deploy:all -- --fresh           # reset the factory discovery list
 ```
+
+The script appends the new factory to `NEXT_PUBLIC_DAO_FACTORIES`, so DAOs
+created by earlier factory deployments stay visible in `/daos`.
 
 Restart `npm run dev` afterwards so the new `NEXT_PUBLIC_*` addresses load.
 Use `--force` only if you want to attempt a deploy below the recommended

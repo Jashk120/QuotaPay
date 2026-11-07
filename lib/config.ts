@@ -1,5 +1,18 @@
 const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
+const primaryDaoFactory = process.env.NEXT_PUBLIC_DAO_FACTORY ?? "";
+const daoFactories = Array.from(
+  new Set(
+    [
+      primaryDaoFactory,
+      ...(process.env.NEXT_PUBLIC_DAO_FACTORIES ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ].filter(Boolean),
+  ),
+);
+
 export const config = {
   chainId: Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 1337),
   rpcUrl:
@@ -41,9 +54,14 @@ export const config = {
   daoCoreAddress: (process.env.NEXT_PUBLIC_DAO_CORE ?? "") as
     | `0x${string}`
     | "",
-  daoFactoryAddress: (process.env.NEXT_PUBLIC_DAO_FACTORY ?? "") as
-    | `0x${string}`
-    | "",
+  daoFactoryAddress: primaryDaoFactory as `0x${string}` | "",
+  /**
+   * Every factory the app should index for discovery. `NEXT_PUBLIC_DAO_FACTORY`
+   * is the newest one (used for creation); the optional
+   * `NEXT_PUBLIC_DAO_FACTORIES` list keeps DAOs from earlier factory
+   * deployments visible after a redeploy.
+   */
+  daoFactories: daoFactories as `0x${string}`[],
   daoGasPaymaster: (process.env.NEXT_PUBLIC_DAO_GAS_PAYMASTER ?? "") as
     | `0x${string}`
     | "",
