@@ -43,9 +43,13 @@ import { compileAll } from "../test/helpers/compile.mjs";
 
 const CHAIN_ID = 1337;
 const addressZero = "0x0000000000000000000000000000000000000000";
-const RPC_ROOT = (process.env.DEVNET_RPC ?? "https://altmempool.forshtat.com")
-  .replace(/\/+$/, "")
-  .replace(/\/rpc$/, "");
+const RPC_ROOT = (process.env.DEVNET_RPC ?? "https://altmempool.forshtat.com").replace(
+  /\/+$/,
+  "",
+);
+// Path-based gateways (e.g. ...nip.io/rpc) must keep their path; bare hosts
+// get /rpc appended.
+const RPC_URL = /\/rpc$/.test(RPC_ROOT) ? RPC_ROOT : `${RPC_ROOT}/rpc`;
 const REGISTRY =
   process.env.STAKING_REGISTRY ?? "0xd51c04d7a0b01124e84de152f4e56d9eecb22d2f";
 const STATE_PATH =
@@ -115,7 +119,7 @@ function loadKey() {
 }
 
 async function rpc(method, params = []) {
-  const res = await fetch(RPC_ROOT, {
+  const res = await fetch(RPC_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
@@ -485,7 +489,7 @@ async function main() {
     NEXT_PUBLIC_USDC_ADDRESS: usdc,
     NEXT_PUBLIC_USDC_DECIMALS: "18",
     DAO_GAS_PAYMASTER: sharedGasPaymaster,
-    DAO_RPC_URL: `${RPC_ROOT}/rpc`,
+    DAO_RPC_URL: RPC_URL,
     DAO_CHAIN_ID: String(CHAIN_ID),
     DAO_AGENT_KEY: agentKey,
   };
