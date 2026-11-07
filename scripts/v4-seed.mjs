@@ -1,26 +1,26 @@
 #!/usr/bin/env node
 /**
- * Create and seed one v4 pool, deploy a DAO swap module, and run a real swap.
+ * Seed the canonical WETH9/USDC v4 pool on the devnet (UNISWAP-V4.md §9.3).
  *
- *   node scripts/v4-seed.mjs
+ * Uses the predeployed infrastructure (PoolManager, PositionManager, Permit2,
+ * WETH9, real FiatTokenV2_2 USDC) and the documented pool parameters:
+ * fee 3000, tick spacing 60, 1 WETH = 3000 USDC, ticks -202260..-190260.
  *
- * Requires deployments/v4-1337.json (run scripts/deploy-v4.mjs first) and the
- * v4 build artifacts in build/v4.
+ *   SEED_KEY=0x... node scripts/v4-seed.mjs --rpc https://sidecar.161.118.164.226.nip.io/rpc
  *
- * Env: DEVNET_RPC, DEPLOYER_KEY / WORKSHOP_STATE.
+ * Key: SEED_KEY (a funded devnet key; the predeploy throwaway is fine).
+ * Writes deployments/v4-1337.json on success.
  */
 import fs from "node:fs";
-import path from "node:path";
 import {
-  decodeFunctionResult,
-  encodeDeployData,
   encodeFunctionData,
+  decodeEventLog,
+  erc20Abi,
   keccak256,
   encodeAbiParameters,
-  parseEventLogs,
+  parseAbiParameters,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { compileAll } from "../test/helpers/compile.mjs";
 
 const args = process.argv.slice(2);
 function arg(name, fallback) {
@@ -28,37 +28,91 @@ function arg(name, fallback) {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }
 
-const RPC = arg(
-  "rpc",
-  process.env.DEVNET_RPC ?? "https://sidecar.161.118.164.226.nip.io/rpc",
-);
-const CHAIN_ID = Number(arg("chain-id", process.env.V4_CHAIN_ID ?? "1337"));
-const STATE_PATH =
-  process.env.WORKSHOP_STATE ??
-  "C:/projects/poolframes/workshop/.workshop-state.json";
-const V4_DIR = path.resolve("build/v4");
-const RECORD = path.resolve("deployments/v4-1337.json");
-const ZERO = "0x0000000000000000000000000000000000000000";
-const Q96 = 2n ** 96n;
+const RPC = arg("rpc", process.env.DEVNET_RPC ?? "https://altmempool.forshtat.com/rpc");
+const CHAIN_ID = Number(arg("chain-id", "1337"));
+const SEED_KEY = process.env.SEED_KEY;
+if (!SEED_KEY) throw new Error("SEED_KEY is not set");
+
+// Predeployed devnet infrastructure (deployments/devnet.md in the sidecar repo).
+const POOL_MANAGER = "0x6bF9Aa9c04fd001385742d61f6818C3236429848";
+const POSITION_MANAGER = "0x5bF24B2CD6f4cc0057F4BeD53264d591620Af57B";
+const STATE_VIEW = "0xd89a052862AaA34f0B6cc7f3B6a9D080584a43FB";
+const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+const WETH9 = "0x1b7d32025F7cA633943BbCC9Ec61a98ef66187b6";
+const USDC = "0xEFe0D421fD473564c9C9b0cDCeB194cF476D6AF5";
+const ADDRESS_ZERO = "0x0000000000000000000000000000000000000000";
+
+// Canonical pool: 1 WETH = 3000 USDC, fee 3000, tick spacing 60, no hooks.
 const FEE = 3000;
 const TICK_SPACING = 60;
-const MINT = 10n ** 24n;
-const LIQUIDITY = 10n ** 21n;
-const SWAP_IN = 10n ** 15n;
+const TICK_LOWER = -202260;
+const TICK_UPPER = -190260;
+const WETH_AMOUNT = 1_000_000_000_000_000_000n; // 1 WETH
+const USDC_AMOUNT = 3_000_000_000n; // 3000 USDC (6 decimals)
+const WETH_WRAP = 2_000_000_000_000_000_000n; // wrap 2 ETH, keep dust
 
-function loadKey() {
-  if (process.env.DEPLOYER_KEY) return process.env.DEPLOYER_KEY;
-  if (!fs.existsSync(STATE_PATH)) {
-    throw new Error(`No DEPLOYER_KEY and no workshop state at ${STATE_PATH}`);
-  }
-  const state = JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
-  if (!state.participantKey) throw new Error("state has no participantKey");
-  return state.participantKey;
-}
-
-function loadV4(name) {
-  return JSON.parse(fs.readFileSync(path.join(V4_DIR, `${name}.json`), "utf8"));
-}
+const pmAbi = [
+  {
+    type: "function",
+    name: "multicall",
+    inputs: [{ name: "data", type: "bytes[]" }],
+    outputs: [{ name: "", type: "bytes[]" }],
+    stateMutability: "payable",
+  },
+  {
+    type: "function",
+    name: "initializePool",
+    inputs: [
+      {
+        name: "pool",
+        type: "tuple",
+        components: [
+          { name: "currency0", type: "address" },
+          { name: "currency1", type: "address" },
+          { name: "fee", type: "uint24" },
+          { name: "tickSpacing", type: "int24" },
+          { name: "hooks", type: "address" },
+        ],
+      },
+      { name: "sqrtPriceX96", type: "uint160" },
+    ],
+    outputs: [{ name: "tick", type: "int24" }],
+    stateMutability: "payable",
+  },
+  {
+    type: "function",
+    name: "modifyLiquidities",
+    inputs: [
+      { name: "unlockData", type: "bytes" },
+      { name: "deadline", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "payable",
+  },
+];
+const permit2Abi = [
+  {
+    type: "function",
+    name: "approve",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint160" },
+      { name: "expiration", type: "uint48" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+];
+const wethAbi = [
+  {
+    type: "function",
+    name: "deposit",
+    inputs: [],
+    outputs: [],
+    stateMutability: "payable",
+  },
+];
 
 async function rpc(method, params = []) {
   const res = await fetch(RPC, {
@@ -67,13 +121,11 @@ async function rpc(method, params = []) {
     body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
   });
   const json = await res.json();
-  if (json.error) {
-    throw new Error(`${method}: ${json.error.message ?? JSON.stringify(json.error)}`);
-  }
+  if (json.error) throw new Error(`${method}: ${json.error.message}`);
   return json.result;
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function waitMined(hash, timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs;
@@ -82,217 +134,206 @@ async function waitMined(hash, timeoutMs = 180_000) {
     if (receipt) return receipt;
     await sleep(2000);
   }
-  throw new Error(`transaction ${hash} not mined in ${timeoutMs}ms`);
+  throw new Error(`transaction ${hash} not mined`);
 }
 
-async function sendLegacy(account, { to = null, value = 0n, data = "0x" }) {
-  const nonce = Number(
-    await rpc("eth_getTransactionCount", [account.address, "pending"]),
-  );
-  let gasPrice = BigInt(await rpc("eth_gasPrice"));
-  if (gasPrice === 0n) gasPrice = 1_000_000_000n;
-  const estimateParams = {
-    from: account.address,
-    data,
-    value: `0x${value.toString(16)}`,
-  };
-  if (to) estimateParams.to = to;
-  const estimate = await rpc("eth_estimateGas", [estimateParams]);
+async function sendLegacy(account, { to, data, value = 0n }) {
+  const nonce = Number(await rpc("eth_getTransactionCount", [account.address, "pending"]));
+  const gasPrice = 2_000_000_000n;
+  const estimate = await rpc("eth_estimateGas", [{ from: account.address, to, data, value: `0x${value.toString(16)}` }]);
   const gas = (BigInt(estimate) * 12n) / 10n;
   const raw = await account.signTransaction({
     chainId: CHAIN_ID,
     nonce,
     to,
-    value,
     data,
+    value,
     gas,
     gasPrice,
     type: "legacy",
   });
   const hash = await rpc("eth_sendRawTransaction", [raw]);
   const receipt = await waitMined(hash);
-  if (receipt.status !== "0x1") {
-    throw new Error(`transaction ${hash} reverted (status ${receipt.status})`);
-  }
-  return { hash, receipt };
+  if (receipt.status !== "0x1") throw new Error(`tx ${hash} reverted`);
+  return receipt;
 }
 
-async function deploy(account, artifact, args = [], value = 0n) {
-  const data = encodeDeployData({
-    abi: artifact.abi,
-    bytecode: artifact.bytecode,
-    args,
-  });
-  const tx = await sendLegacy(account, { data, value });
-  const address = tx.receipt.contractAddress;
-  if (!address) throw new Error(`${artifact.name ?? "contract"} deploy failed`);
-  console.log(`      ${artifact.name ?? "contract"}: ${address}`);
-  return address;
-}
-
-async function read(artifact, address, functionName, args = []) {
-  const data = encodeFunctionData({ abi: artifact.abi, functionName, args });
-  const raw = await rpc("eth_call", [{ to: address, data }, "latest"]);
-  return decodeFunctionResult({ abi: artifact.abi, functionName, data: raw });
-}
-
-async function send(account, artifact, address, functionName, args = []) {
-  const data = encodeFunctionData({ abi: artifact.abi, functionName, args });
-  return sendLegacy(account, { to: address, data });
-}
-
-function sortTokens(a, b) {
-  return BigInt(a) < BigInt(b) ? [a, b] : [b, a];
+function sqrtPriceX96AtTick(tick) {
+  return Math.sqrt(Math.pow(1.0001, tick)) * 2 ** 96;
 }
 
 async function main() {
-  const account = privateKeyToAccount(loadKey());
-  const core = JSON.parse(fs.readFileSync(RECORD, "utf8"));
-  const poolManager = core.poolManager;
-  if (!poolManager) throw new Error("deployments/v4-1337.json has no poolManager");
+  const account = privateKeyToAccount(SEED_KEY);
+  console.log(`seeder:  ${account.address}`);
+  console.log(`rpc:     ${RPC}`);
+  const out = { chainId: CHAIN_ID, rpc: RPC, seeder: account.address, txs: {} };
 
-  const seederArtifact = loadV4("V4PoolSeeder");
-  const stateViewArtifact = loadV4("StateView");
-  const stateView = core.stateView;
-  const artifacts = compileAll();
+  // 1. Wrap ETH -> WETH9.
+  console.log("[1/5] wrapping ETH -> WETH9");
+  out.txs.wrap = (
+    await sendLegacy(account, {
+      to: WETH9,
+      data: encodeFunctionData({ abi: wethAbi, functionName: "deposit" }),
+      value: WETH_WRAP,
+    })
+  ).transactionHash;
 
-  console.log(`deployer: ${account.address}`);
-  console.log(`rpc:      ${RPC}`);
-  console.log(`manager:  ${poolManager}`);
-  console.log(`state:    ${stateView}`);
+  // 2. Approve Permit2, then Permit2 -> PositionManager.
+  console.log("[2/5] approvals (token -> Permit2 -> PositionManager)");
+  const expiry = Math.floor(Date.now() / 1000) + 30 * 86_400;
+  for (const [token, amount] of [
+    [WETH9, WETH_WRAP],
+    [USDC, 3_300_000_000n],
+  ]) {
+    await sendLegacy(account, {
+      to: token,
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [PERMIT2, (1n << 256n) - 1n],
+      }),
+    });
+    const r = await sendLegacy(account, {
+      to: PERMIT2,
+      data: encodeFunctionData({
+        abi: permit2Abi,
+        functionName: "approve",
+        args: [token, POSITION_MANAGER, amount, expiry],
+      }),
+    });
+    out.txs[`permit2-${token === WETH9 ? "weth" : "usdc"}`] = r.transactionHash;
+  }
 
-  console.log("\n[1/6] demo tokens");
-  const tokenA = await deploy(account, {
-    ...artifacts.MockERC20,
-    name: "MockERC20",
-  }, ["V4A", "V4A"]);
-  const tokenB = await deploy(account, {
-    ...artifacts.MockERC20,
-    name: "MockERC20",
-  }, ["V4B", "V4B"]);
-  const [token0, token1] = sortTokens(tokenA, tokenB);
-  const key = {
-    currency0: token0,
-    currency1: token1,
+  // 3. Price + liquidity math (floats; 0.999 margin keeps us under the caps).
+  const sqrtInit = BigInt(Math.floor(Math.sqrt(3000e6 / 1e18) * 2 ** 96));
+  const sqrtA = sqrtPriceX96AtTick(TICK_LOWER);
+  const sqrtB = sqrtPriceX96AtTick(TICK_UPPER);
+  const Q96 = 2 ** 96;
+  const l0 = (Number(WETH_AMOUNT) * sqrtA * sqrtB) / ((sqrtB - sqrtA) * Q96);
+  const l1 = (Number(USDC_AMOUNT) * Q96) / (sqrtB - sqrtA);
+  const liquidity = BigInt(Math.floor(Math.min(l0, l1) * 0.999));
+  console.log(`      sqrtPriceX96=${sqrtInit} liquidity=${liquidity}`);
+
+  // 4. multicall([initializePool, modifyLiquidities(MINT_POSITION + SETTLE_PAIR)]).
+  console.log("[3/5] initializePool + mint position");
+  const poolKey = [WETH9, USDC, FEE, TICK_SPACING, ADDRESS_ZERO];
+  const actions = `0x${(0x02).toString(16).padStart(2, "0")}${(0x0d).toString(16).padStart(2, "0")}`;
+  const mintParams = [
+    encodeAbiParameters(
+      parseAbiParameters(
+        "(address,address,uint24,int24,address),int24,int24,uint256,uint256,uint256,address,bytes"
+      ),
+      [
+        poolKey,
+        TICK_LOWER,
+        TICK_UPPER,
+        liquidity,
+        (WETH_AMOUNT * 105n) / 100n,
+        (USDC_AMOUNT * 105n) / 100n,
+        account.address,
+        "0x",
+      ]
+    ),
+    encodeAbiParameters(parseAbiParameters("address,address"), [WETH9, USDC]),
+  ];
+  const initData = encodeFunctionData({
+    abi: pmAbi,
+    functionName: "initializePool",
+    args: [poolKey, sqrtInit],
+  });
+  const modifyData = encodeFunctionData({
+    abi: pmAbi,
+    functionName: "modifyLiquidities",
+    args: [
+      encodeAbiParameters(parseAbiParameters("bytes,bytes[]"), [actions, mintParams]),
+      BigInt(Math.floor(Date.now() / 1000) + 3600),
+    ],
+  });
+  const seedReceipt = await sendLegacy(account, {
+    to: POSITION_MANAGER,
+    data: encodeFunctionData({
+      abi: pmAbi,
+      functionName: "multicall",
+      args: [[initData, modifyData]],
+    }),
+  });
+  out.txs.seed = seedReceipt.transactionHash;
+
+  // 5. Verify: pool id, slot0, liquidity, position NFT.
+  const poolId = keccak256(
+    encodeAbiParameters(parseAbiParameters("(address,address,uint24,int24,address)"), [poolKey])
+  );
+  let tokenId = null;
+  for (const log of seedReceipt.logs) {
+    try {
+      if (
+        log.address.toLowerCase() === POSITION_MANAGER.toLowerCase() &&
+        log.topics[0] === keccak256("0x" + Buffer.from("Transfer(address,address,uint256)").toString("hex"))
+      ) {
+        tokenId = BigInt(log.topics[3]).toString();
+      }
+    } catch { /* not a Transfer */ }
+  }
+  const svAbi = [
+    {
+      type: "function",
+      name: "getSlot0",
+      inputs: [{ name: "poolId", type: "bytes32" }],
+      outputs: [{ type: "uint160" }, { type: "int24" }, { type: "uint24" }, { type: "uint24" }],
+      stateMutability: "view",
+    },
+    {
+      type: "function",
+      name: "getLiquidity",
+      inputs: [{ name: "poolId", type: "bytes32" }],
+      outputs: [{ type: "uint128" }],
+      stateMutability: "view",
+    },
+  ];
+  const slot0 = await rpc("eth_call", [
+    { to: STATE_VIEW, data: encodeFunctionData({ abi: svAbi, functionName: "getSlot0", args: [poolId] }) },
+    "latest",
+  ]);
+  const liq = await rpc("eth_call", [
+    { to: STATE_VIEW, data: encodeFunctionData({ abi: svAbi, functionName: "getLiquidity", args: [poolId] }) },
+    "latest",
+  ]);
+  out.pool = {
+    id: poolId,
+    currency0: WETH9,
+    currency1: USDC,
     fee: FEE,
     tickSpacing: TICK_SPACING,
-    hooks: ZERO,
+    hooks: ADDRESS_ZERO,
+    sqrtPriceX96: sqrtInit.toString(),
+    tickLower: TICK_LOWER,
+    tickUpper: TICK_UPPER,
+    slot0,
+    liquidity: BigInt(liq).toString(),
+    positionTokenId: tokenId,
   };
-  const poolId = keccak256(
-    encodeAbiParameters(
-      [
-        {
-          type: "tuple",
-          components: [
-            { name: "currency0", type: "address" },
-            { name: "currency1", type: "address" },
-            { name: "fee", type: "uint24" },
-            { name: "tickSpacing", type: "int24" },
-            { name: "hooks", type: "address" },
-          ],
-        },
-      ],
-      [key],
-    ),
-  );
-  console.log(`      token0: ${token0}`);
-  console.log(`      token1: ${token1}`);
-  console.log(`      poolId: ${poolId}`);
+  console.log(`      poolId:   ${poolId}`);
+  console.log(`      tokenId:  ${tokenId}`);
+  console.log(`      liquidity:${BigInt(liq).toString()}`);
 
-  console.log("[2/6] seeder");
-  const seeder = await deploy(account, seederArtifact, [poolManager]);
-
-  console.log("[3/6] initialize + seed pool");
-  await send(account, seederArtifact, seeder, "initialize", [key, Q96]);
-  const tokenArtifact = { ...artifacts.MockERC20, name: "MockERC20" };
-  for (const token of [token0, token1]) {
-    await send(account, tokenArtifact, token, "mint", [seeder, MINT]);
-  }
-  await send(account, seederArtifact, seeder, "addLiquidity", [
-    key,
-    -887220,
-    887220,
-    LIQUIDITY,
-  ]);
-  for (const token of [token0, token1]) {
-    await send(account, seederArtifact, seeder, "sweep", [token, account.address]);
-  }
-  const slot0 = await read(stateViewArtifact, stateView, "getSlot0", [poolId]);
-  const liquidity = await read(stateViewArtifact, stateView, "getLiquidity", [poolId]);
-  console.log(`      sqrtPriceX96: ${slot0[0]}`);
-  console.log(`      tick:         ${slot0[1]}`);
-  console.log(`      liquidity:    ${liquidity}`);
-
-  console.log("[4/6] DAO swap module");
-  const module = await deploy(account, {
-    ...artifacts.DaoSwapModule,
-    name: "DaoSwapModule",
-  }, [poolManager, account.address, account.address]);
-  await send(account, artifacts.DaoSwapModule, module, "setPool", [key, true]);
-
-  console.log("[5/6] swap");
-  await send(account, tokenArtifact, token0, "mint", [account.address, SWAP_IN]);
-  await send(account, tokenArtifact, token0, "transfer", [module, SWAP_IN]);
-  const latest = await rpc("eth_getBlockByNumber", ["latest", false]);
-  const deadline = BigInt(latest.timestamp) + 3600n;
-  const request = {
-    key,
-    zeroForOne: true,
-    amountIn: SWAP_IN,
-    minAmountOut: 1n,
-    deadline,
-  };
-  const swapTx = await send(
-    account,
-    artifacts.DaoSwapModule,
-    module,
-    "swap",
-    [request],
-  );
-  const swapped = parseEventLogs({
-    abi: artifacts.DaoSwapModule.abi,
-    eventName: "Swapped",
-    logs: swapTx.receipt.logs,
-  })[0];
-  const amountOut = swapped?.args?.amountOut ?? 0n;
-  const outBalance = await read(
-    tokenArtifact,
-    key.currency1,
-    "balanceOf",
-    [account.address],
-  );
-  console.log(`      swap tx:   ${swapTx.hash}`);
-  console.log(`      amountOut: ${amountOut}`);
-  console.log(`      balance:   ${outBalance}`);
-  if (amountOut === 0n && outBalance === 0n) {
-    throw new Error("swap produced no output");
-  }
-
-  console.log("[6/6] record");
-  core.demoPool = {
-    token0,
-    token1,
-    key,
-    poolId,
-    sqrtPriceX96: String(Q96),
-    tick: String(slot0[1]),
-    liquidity: String(liquidity),
-    seeder,
-    seederRuntimeSize: seederArtifact.runtimeSize,
-    swapModule: module,
-    swap: {
-      zeroForOne: true,
-      amountIn: String(SWAP_IN),
-      minAmountOut: "1",
-      amountOut: String(amountOut),
-      txHash: swapTx.hash,
+  fs.mkdirSync("deployments", { recursive: true });
+  const path = "deployments/v4-1337.json";
+  fs.writeFileSync(path, JSON.stringify({
+    ...out,
+    contracts: {
+      poolManager: POOL_MANAGER,
+      positionManager: POSITION_MANAGER,
+      stateView: STATE_VIEW,
+      permit2: PERMIT2,
+      weth9: WETH9,
+      usdc: USDC,
     },
-  };
-  fs.writeFileSync(RECORD, JSON.stringify(core, null, 2) + "\n");
-  console.log(`wrote ${RECORD}`);
+  }, null, 2));
+  console.log(`wrote ${path}`);
+  if (BigInt(liq) === 0n) {
+    console.error("FAIL: pool has no liquidity");
+    process.exitCode = 2;
+  }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+main().catch((e) => { console.error(e); process.exit(1); });

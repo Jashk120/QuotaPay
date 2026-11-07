@@ -3,9 +3,11 @@
 Status: design + runbook. The Phase 0 probe, `DaoSwapModule`, its factory, and
 the `DaoCore`/`DaoFactory` wiring are implemented and covered by `t24` on
 ganache; the probe also passes on the devnet (`TSTORE`/`TLOAD`, `MCOPY`). The
-devnet deployment phases (v4 build, pool seeding, frame swap) are not
-implemented yet. `DAO.md` remains the source of truth for the existing DAO
-contracts; this file is the plan for adding v4.
+v4 infrastructure is predeployed on the devnet (not built from source) and the
+WETH9/USDC pool is seeded with real liquidity (`deployments/v4-1337.json`).
+Remaining: the direct swap smoke test, the agent frame swap, and the above-cap
+proposal (Phases 4–6). `DAO.md` remains the source of truth for the existing
+DAO contracts; this file is the plan for adding v4.
 
 Target chain: the EIP-8141 / ethrex devnet (chain id 1337), with v4 deployed
 from source. The Uniswap API is out of scope there: chain 1337 is not in its
@@ -39,7 +41,7 @@ pool for the demo.
 | Valuation | Keep `AssetModule.unitPrice` (mock) for asset caps. Use `StateView.getSlot0` for display and a sanity bound only. |
 | Native ETH | `currency0 = address(0)`; the PoolManager holds native ETH. DaoCore already has `receive()`. |
 | Hook (stretch) | Per-DAO permissioned RWA hook; allowlist the module address, not `tx.origin`. |
-| v4 version | Pin the source commit/tag and compile with the v4-core settings (below). Do not mix builds. |
+| v4 version | Predeployed replayed-mainnet builds on the devnet (see Phase 1). Do not build from source. |
 
 ---
 
@@ -505,79 +507,71 @@ contracts' shanghai setting for this.
 **Gate:** all six checks pass, and the probe result is recorded in the runbook
 output (chain id, gas limit, code-size result, frame result).
 
-### Phase 1 - pin and build v4
+### Phase 1 - pin and build v4 (done, no build needed)
 
-Do not use floating branches. Pick a commit/tag for each repo and record it in
-`deployments/v4-1337.json`.
+The devnet already runs the real v4 infrastructure (replayed mainnet
+deployments, `deployments/devnet.md` in the sidecar repo). Nothing is compiled
+or deployed from source:
 
-v4-core's own build settings (from its `foundry.toml`) are:
+| Contract | Devnet address | Note |
+|---|---|---|
+| `PoolManager` | `0x6bF9Aa9c04fd001385742d61f6818C3236429848` | Real bytecode via the `UniswapV4DeployerCompetition` contract; 24,009 bytes |
+| `PositionManager` | `0x5bF24B2CD6f4cc0057F4BeD53264d591620Af57B` | 23,877 bytes; `poolManager`/`permit2`/`WETH9` rewired to devnet addresses |
+| `StateView` | `0xd89a052862AaA34f0B6cc7f3B6a9D080584a43FB` | 3,531 bytes |
+| `V4Quoter` | `0xeEa49CC6419125E2f706bf7f95Cf34ac7e93087D` | 5,820 bytes |
+| `UniversalRouter` | `0x5e2250a42608a5cc9f62e23ab24824ee25b5e2be` | Devnet-only address; v2/v3/bridge paths revert (no counterparties) |
+| `Permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | Canonical mainnet address, 9,152 bytes |
+| `WETH9` | `0x1b7d32025F7cA633943BbCC9Ec61a98ef66187b6` | Canonical; wrap devnet ETH |
+| `USDC` (FiatTokenV2_2) | `0xEFe0D421fD473564c9C9b0cDCeB194cF476D6AF5` | **6 decimals**; bytecode identical to mainnet |
 
-```toml
-solc = "0.8.26"
-evm_version = "cancun"
-via_ir = true
-optimizer_runs = 44444444
-bytecode_hash = "none"
-```
+Verified 2026-11-07 through the self-hosted node (`eth_getCode` sizes match
+the canonical builds). The only v4-adjacent build left is `DaoSwapModule`
+itself: solc 0.8.28 with the repo's shanghai settings, importing only
+v4 interfaces/types (never `PoolManager.sol`).
 
-Compile with those settings. A solc-js build with different settings may exceed
-EIP-170 or produce different gas. Foundry is the documented path; if it is not
-available on the build machine, use solc-js 0.8.26 with the same settings and
-compare the deployed runtime size to the canonical 24,009 bytes.
+**Gate:** passed — sizes match, no deployment needed.
 
-The v4 singleton and the DAO-side module are two builds:
+### Phase 2 - deploy the singleton (done, predeployed)
 
-- v4 core (`PoolManager`, `StateView`, periphery) with solc 0.8.26 and the
-  settings above.
-- `DaoSwapModule` with the repo's solc 0.8.28 and existing shanghai settings.
-  It must import only v4 interfaces/types, not `PoolManager.sol` or other
-  implementation files. v4-core mixes exact (`pragma solidity 0.8.26;`) and
-  caret pragmas; a 0.8.28 compiler will reject an exact 0.8.26 file.
-- Vendor the handful of v4 interfaces/types the module needs under a local path
-  and add that path to `test/helpers/compile.mjs`'s `findImports`, or add a
-  remapping. Do not vendor the whole v4-core tree into the DAO build.
+Nothing to deploy. The remaining deployable is `DaoSwapModuleFactory` (per-DAO
+module), which is part of the DAO stack, not v4. `PoolManager.owner` is the
+mainnet Uniswap governance address baked into the replayed bytecode — protocol
+fees are ungovernable here, which is fine for the demo.
 
-**Gate:** `PoolManager` runtime bytecode length is 24,009 bytes (or the recorded
-build's size, with the reason for the difference). If it is over 24,576, stop.
+**Gate:** passed — `StateView.getSlot0`/`getLiquidity` answer on the pool below.
 
-### Phase 2 - deploy the singleton
+### Phase 3 - create and seed pools (done 2026-11-07)
 
-Deploy in this order:
+Seeded with `scripts/v4-seed.mjs` (wrap WETH9, approve Permit2, then
+`PositionManager.multicall([initializePool, modifyLiquidities])` with
+`MINT_POSITION` + `SETTLE_PAIR`). Same parameters as the documented pool, so
+the pool id matches it exactly:
 
-1. `PoolManager(initialOwner)`. The current v4-core constructor takes the
-   `ProtocolFees` owner; check the pinned tag, because older tags were no-arg.
-2. `StateView(poolManager)`.
-3. Optional: `Permit2`, `UniversalRouter 2.1.2`, `PositionManager`.
-4. `DaoSwapModuleFactory(poolManager)`.
-5. The DAO stack (`DaoFactory` with the new child factory wired).
+| Field | Value |
+|---|---|
+| Pool | WETH9 / USDC, fee 3000, tick spacing 60, no hooks |
+| Pool id | `0x784bd7879f8155eda79b7834d53c2f19ace60aed221fe33ef03ce660eff60648` |
+| Init price | 1 WETH = 3000 USDC (`sqrtPriceX96 = 4339505179874779662909440`) |
+| Range | ticks -202260..-190260 (~1 WETH + ~3000 USDC) |
+| Position NFT | token id 13, deployer-owned |
+| Liquidity | 89830317719081 |
+| Seed tx | `0xcd9d13094f6a85f47bc8a87083f907d131ffc91411da0232b616be5641783b16` |
 
-Set `PoolManager` ownership to the DAO admin/timelock, not a throwaway EOA. The
-owner controls protocol fees; leaving it with the deployer is an unnecessary
-privilege.
+Full record: `deployments/v4-1337.json` (`canonical` section). The same file
+keeps the earlier slice's evidence alongside: the vendored PoolManager +
+StateView deployment, the mock-token demo pool with both-direction smoke swaps,
+and the native-ETH/mock-USDC pool with its `TreasuryFundHelper`
+(`scripts/seed-usdc-pool.mjs`). The canonical pool above is the real-asset path;
+the mock pools remain usable for faucet-style tests. If the devnet ever resets,
+re-running `scripts/v4-seed.mjs` recreates this pool (the id is deterministic
+from the key + price).
 
-**Gate:** `eth_getCode(poolManager).length` matches the build, `owner()` is the
-expected address, and `StateView` reads an empty pool id without reverting.
+Note the decimals: real USDC has **6** decimals, WETH 18 — every amount in
+`SwapRequest` and every cap touching these tokens must use raw units, not
+`parseEther`.
 
-### Phase 3 - create and seed pools
-
-For each pool, record the full `PoolKey` (currencies sorted, fee, tick spacing,
-hooks) and the pool id.
-
-1. `initialize(key, sqrtPriceX96)`.
-2. Add liquidity. Either:
-   - deploy `PositionManager` and use `multicall([initializePool, modifyLiquidities])`
-     with `MINT_POSITION` + `SETTLE_PAIR`, or
-   - use a small direct seeder that calls `poolManager.unlock` and
-     `modifyLiquidity`, then settles both currencies. The direct seeder avoids
-     deploying two near-limit contracts and is the recommended demo path.
-
-Initial price: `sqrtPriceX96 = sqrt(token1/token0) * 2^96`, using raw token
-units. For a 1:1 pool of 6-decimal USDC and 18-decimal RWA, the raw price is
-`1e12`, so `sqrtPriceX96 = 1e6 * 2^96`. Write the number down; do not recompute
-it in three different places.
-
-**Gate:** `StateView.getSlot0(poolId).sqrtPriceX96` matches the input and
-`getLiquidity(poolId) > 0`.
+**Gate:** passed — `getSlot0` matches the init price and liquidity is
+89830317719081 (see `deployments/v4-1337.json`).
 
 ### Phase 4 - direct swap smoke test
 
