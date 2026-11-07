@@ -189,11 +189,20 @@ export async function POST(request: Request) {
       }
     }
 
-    const expectedSigner = (await client.readContract({
-      address: agentAccount,
-      abi: agentAccountAbi,
-      functionName: "agentSigner",
-    })) as Address;
+    const [expectedSigner, frameEnforced] = await Promise.all([
+      client.readContract({
+        address: agentAccount,
+        abi: agentAccountAbi,
+        functionName: "agentSigner",
+      }) as Promise<Address>,
+      client
+        .readContract({
+          address: agentAccount,
+          abi: agentAccountAbi,
+          functionName: "frameEnforced",
+        })
+        .catch(() => false) as Promise<boolean>,
+    ]);
 
     const derived = OxAddress.fromPublicKey(
       Secp256k1.getPublicKey({ privateKey: agentKey }),
@@ -215,6 +224,7 @@ export async function POST(request: Request) {
       agentSigner: derived,
       paymaster: selfFunded ? undefined : (paymaster as Address),
       selfFunded,
+      frameEnforced: Boolean(frameEnforced),
       chargeData: CHARGE_CALLDATA,
       calls: [
         {

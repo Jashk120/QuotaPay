@@ -448,10 +448,13 @@ not supported`. The compose on the VPS has the flag. The VPS is arm64 while
 the image is amd64-only, so the service runs under QEMU (`platform:
 linux/amd64`); allow ~1 min for boot.
 
-Frame probe through the self-hosted node returns the same negative result as
-the public endpoint (`Frame transaction validation prefix does not match any
-recognized shape`), so deploys must use `DAO_FRAME_ENFORCED=false`. The two
-endpoints agree, which is the parity check for the relay.
+The bare-shape frame probe returns a negative result on both endpoints
+(`Frame transaction validation prefix does not match any recognized shape`),
+but that probe never reaches VERIFY code — it tests shape admission, not
+introspection. A follow-up probe on 2026-11-07 used the real sponsored shape
+against a `frameEnforced=true` account and got `out of policy` at validation,
+so new DAOs deploy with `DAO_FRAME_ENFORCED=true`. The two endpoints agree,
+which is the parity check for the relay.
 
 Observed on 2026-11-06 against the devnet RPC:
 

@@ -219,7 +219,10 @@ export default function NewDaoPage() {
           daoId,
           admin: address,
           agentSigner: signerJson.address as `0x${string}`,
-          frameEnforced: false,
+          // The sidecar admits SENDER-frame reads in the sponsored shape
+          // (proven live: rogue SENDER reverts "out of policy" at validation),
+          // so new DAOs enforce the policy table in VERIFY.
+          frameEnforced: true,
           memberPeriodLength: 2_592_000,
           addMemberLimit: Number(rateLimit) || 1,
           votePeriod: BigInt((Number(windowHours) || 1) * 3600),

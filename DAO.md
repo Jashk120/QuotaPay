@@ -37,9 +37,9 @@ separately.
   against the canonical transaction hash) whose resolved signer equals
   `agentSigner`;
 - only SENDER target/selector pairs present in its DAO-owned policy table
-  (when `frameEnforced` is true **and** the chain's client admits SENDER-frame
-  reads during validation — not yet demonstrated on the live devnet, which
-  deploys with `DAO_FRAME_ENFORCED=false`);
+  (when `frameEnforced` is true — proven live on the sidecar on 2026-11-07: a
+  rogue SENDER reverts `out of policy` in validation frame 0; the scan needs
+  100k VERIFY gas, so the builder declares 100k when the DAO is enforced);
 - `EXECUTION` approval only. Payment is approved separately by the paymaster.
 
 `DaoCore` and `AssetModule` re-check every limit after execution, so a VERIFY
@@ -208,9 +208,9 @@ EIP-170 24 KB limit (the `DaoCoreFactory` runtime is the tightest one).
   them from the plan store, but the on-chain event is not complete for those
   actions yet.
 - `frameEnforced` is set by the deployment config; changing it later is a
-  tier-3 proposal because it is part of the validation policy. If the §7.3
-  probe shows that chain 1337 cannot read SENDER frames during VERIFY, deploy
-  with `DAO_FRAME_ENFORCED=false`; `DaoCore` remains the enforcement point.
+  tier-3 proposal because it is part of the validation policy. New DAOs deploy
+  with `frameEnforced=true`; existing ones flip through governance. `DaoCore`
+  remains the execution-time enforcement point regardless.
 - The demo asset and price are mocks. No real RWA custody or oracle.
 - Without `NEXT_PUBLIC_DAO_CORE` the UI is a local simulation. With it set, the
   console reads `DaoCore` and submits real agent frame transactions. The join

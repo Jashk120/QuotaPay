@@ -61,11 +61,11 @@ A critique of an existing governance agent points out that whoever builds and co
 
 The agent never holds an externally owned account with open authority. It transacts through `AgentAccount`, a contract account that is `tx.sender`.
 
-- Its VERIFY frame reads the SENDER frame's target and selector and approves execution only if they match a policy table stored in the account. This holds when `frameEnforced` is true **and** the client admits SENDER-frame reads during validation (spec §7.3 probe must PASS on that chain). On the live devnet the probe has not passed, so deployments use `DAO_FRAME_ENFORCED=false` and enforcement currently happens at execution in `DaoCore`; see §7.3.
+- Its VERIFY frame reads the SENDER frame's target and selector and approves execution only if they match a policy table stored in the account. This holds when `frameEnforced` is true. Demonstrated live on the sidecar on 2026-11-07: a `frameEnforced=true` account with an empty policy table rejects a rogue SENDER with `out of policy` in validation frame 0 (the scan needs 100k VERIFY gas; the original §7.3 probe tested a bare shape the client rejects before VERIFY runs, so its negative result was inconclusive). New DAOs deploy enforced; older ones flip through governance. `DaoCore` additionally enforces at execution; see §7.3.
 - The policy table can be changed only by `DaoCore` as the result of a member vote.
 - If VERIFY reverts before payment approval, the transaction is invalid at the protocol level, never enters a block, and no gas is charged: https://ethresear.ch/t/frame-transactions-and-the-three-gates-to-privacy/24666
 
-This is the difference from session-key models as designed: out-of-policy transactions are rejected at validation, before execution. **Status: not yet demonstrated on the live devnet** — `frameEnforced=false` there, so `DaoCore` is the enforcing layer today (execution, not validation). Do not claim validation-enforcement until a real client rejects an out-of-policy frame tx.
+This is the difference from session-key models as designed: out-of-policy transactions are rejected at validation, before execution. **Status: demonstrated on the live devnet on 2026-11-07** — a real client rejects an out-of-policy frame tx with `out of policy` at validation. New DAOs deploy with enforcement on; DAOs created earlier run `frameEnforced=false` until a governance vote flips them, with `DaoCore` as the enforcing layer meanwhile.
 
 ### 4.2 Tiered authorization checked onchain
 

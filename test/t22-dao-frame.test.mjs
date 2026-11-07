@@ -52,6 +52,37 @@ test("T22 DAO frame layouts", async (t) => {
     assert.equal(tx.signatures[0].signer, signer);
   });
 
+  await t.test("enforced VERIFY declares 100k for the policy scan", () => {
+    const plain = buildAgentActionFrameTx({
+      chainId: 1337,
+      nonce: 9n,
+      agentAccount: AGENT_ACCOUNT,
+      agentSigner: signer,
+      paymaster: PAYMASTER,
+      chargeData: "0xdeadbeef",
+      calls: [{ to: DAO_CORE, data: "0xaaaa0001" }],
+    });
+    assert.equal(plain.frames[0].executionGas, 20_000n);
+    const enforced = buildAgentActionFrameTx({
+      chainId: 1337,
+      nonce: 9n,
+      agentAccount: AGENT_ACCOUNT,
+      agentSigner: signer,
+      paymaster: PAYMASTER,
+      chargeData: "0xdeadbeef",
+      frameEnforced: true,
+      calls: [{ to: DAO_CORE, data: "0xaaaa0001" }],
+    });
+    assert.equal(enforced.frames[0].executionGas, 100_000n);
+    // Enforced prefix: 100k + 60k + 12k + ~2.8k signature, inside the 500k cap.
+    const prefix =
+      enforced.frames[0].executionGas +
+      enforced.frames[1].executionGas +
+      enforced.frames[2].executionGas +
+      2_800n;
+    assert.ok(prefix < 500_000n, `prefix ${prefix} exceeds the sidecar budget`);
+  });
+
   await t.test("self-funded agent action drops the paymaster frames", () => {
     const tx = buildAgentActionFrameTx({
       chainId: 1337,
