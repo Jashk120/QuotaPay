@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AdminSignatureDialog, type SignatureRequest } from "@/components/dao/admin-signature-dialog";
 import { AgentChat } from "@/components/dao/agent-chat";
+import { AgentWalletCard } from "@/components/dao/agent-wallet-card";
 import { AssetsPanel } from "@/components/dao/assets-panel";
 import { MembersPanel } from "@/components/dao/members-panel";
 import { PolicyTable } from "@/components/dao/policy-table";
@@ -956,6 +957,8 @@ export default function DaoConsolePage() {
         />
         <Summary label="Period spend" value={`${usage}% of cap`} progress={usage} />
       </div>
+
+      <AgentWalletCard state={state} />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <div className="space-y-2">

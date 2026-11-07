@@ -29,6 +29,8 @@ import {PolicyRule} from "./libraries/DaoTypes.sol";
 /// can pause the account directly, without the agent, as the emergency valve.
 contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     address public constant ENTRY_POINT = address(0xaa);
+    /// Minimal ERC20 surface for sweeping tokens the agent receives.
+    bytes4 private constant ERC20_TRANSFER = 0xa9059cbb;
 
     struct Rule {
         bool allowed;
@@ -41,6 +43,7 @@ contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     address public agentSigner;
     bool public frameEnforced;
     bool public paused;
+    bool private _entered;
 
     mapping(address => mapping(bytes4 => Rule)) public rules;
 
@@ -50,6 +53,9 @@ contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     event RuleSet(address indexed target, bytes4 indexed selector, bool allowed, uint8 tier);
     event FrameEnforcedSet(bool enforced);
     event PausedSet(bool paused);
+    event Deposited(address indexed from, uint256 amount);
+    event Withdrawn(address indexed to, uint256 amount);
+    event TokenWithdrawn(address indexed token, address indexed to, uint256 amount);
 
     modifier onlyFactory() {
         require(msg.sender == factory, "not factory");
@@ -64,6 +70,13 @@ contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     modifier onlyAdminOrDao() {
         require(msg.sender == admin || msg.sender == dao, "not admin or dao");
         _;
+    }
+
+    modifier nonReentrant() {
+        require(!_entered, "reentrant");
+        _entered = true;
+        _;
+        _entered = false;
     }
 
     constructor(
@@ -133,6 +146,49 @@ contract AgentAccount is HegotaSupport(Devnet.ERC8421_WORKSHOP) {
     function pause(bool paused_) external onlyAdminOrDao {
         paused = paused_;
         emit PausedSet(paused_);
+    }
+
+    // ----------------------------------------------------- agent wallet --
+
+    /// Top up the agent's ETH balance. Anyone may deposit; only the admin or
+    /// the DAO can take it out. This is the agent's gas/operations balance, not
+    /// the DAO treasury.
+    function deposit() external payable {
+        require(msg.value > 0, "amount=0");
+        emit Deposited(msg.sender, msg.value);
+    }
+
+    /// Withdraw ETH from the agent account. Admin or governance only.
+    function withdraw(address payable to, uint256 amount)
+        external
+        onlyAdminOrDao
+        nonReentrant
+    {
+        require(to != address(0), "to=0");
+        require(amount > 0, "amount=0");
+        require(address(this).balance >= amount, "insufficient");
+        (bool ok, ) = to.call{value: amount}("");
+        require(ok, "withdraw failed");
+        emit Withdrawn(to, amount);
+    }
+
+    /// Sweep any ERC20 the agent holds (USDC, etc.). Admin or governance only.
+    function withdrawToken(address token, address to, uint256 amount)
+        external
+        onlyAdminOrDao
+        nonReentrant
+    {
+        require(token != address(0), "token=0");
+        require(to != address(0), "to=0");
+        require(amount > 0, "amount=0");
+        (bool ok, bytes memory data) = token.call(
+            abi.encodeWithSelector(ERC20_TRANSFER, to, amount)
+        );
+        require(
+            ok && (data.length == 0 || abi.decode(data, (bool))),
+            "token transfer failed"
+        );
+        emit TokenWithdrawn(token, to, amount);
     }
 
     // -------------------------------------------------------- EIP-8141 frame --

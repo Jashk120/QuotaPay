@@ -94,6 +94,49 @@ test("T17 AgentAccount: policy, pause and rotation", async (t) => {
     assert.equal(await account.paused(), false);
   });
 
+  await t.test("agent wallet: deposit ETH and sweep ETH/ERC20", async () => {
+    await (await account.deposit({ value: ethers.parseEther("1") })).wait();
+    assert.equal(
+      await chain.nativeBalance(accountAddr),
+      ethers.parseEther("1")
+    );
+
+    await expectRevert(
+      () =>
+        account
+          .connect(attacker)
+          .withdraw.staticCall(attackerAddr, ethers.parseEther("0.1")),
+      "not admin or dao"
+    );
+    await (
+      await account.connect(admin).withdraw(adminAddr, ethers.parseEther("0.4"))
+    ).wait();
+    assert.equal(
+      await chain.nativeBalance(accountAddr),
+      ethers.parseEther("0.6")
+    );
+
+    const token = await deploy(artifacts, "MockERC20", deployer, [
+      "USDC",
+      "USDC",
+    ]);
+    const tokenAddr = await token.getAddress();
+    await (await token.mint(accountAddr, 1000n)).wait();
+
+    await expectRevert(
+      () =>
+        account
+          .connect(attacker)
+          .withdrawToken.staticCall(tokenAddr, attackerAddr, 1n),
+      "not admin or dao"
+    );
+    await (
+      await account.connect(admin).withdrawToken(tokenAddr, adminAddr, 600n)
+    ).wait();
+    assert.equal((await token.balanceOf(adminAddr)).toString(), "600");
+    assert.equal((await token.balanceOf(accountAddr)).toString(), "400");
+  });
+
   await t.test("signer and admin rotation are DAO-only", async () => {
     await expectRevert(
       () => account.connect(attacker).setAgentSigner.staticCall(nextSignerAddr),

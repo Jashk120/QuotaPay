@@ -3,6 +3,7 @@ import {
   createPublicClient,
   http,
   isAddress,
+  parseEther,
   toFunctionSelector,
   verifyMessage,
   type Address,
@@ -75,9 +76,6 @@ export async function POST(request: Request) {
       config.chainId,
   );
 
-  if (!paymaster || !isAddress(paymaster)) {
-    return bad("DAO_GAS_PAYMASTER is not configured", 503);
-  }
   if (!agentKey) return bad("DAO_AGENT_KEY is not configured", 503);
 
   let body: Body;
@@ -156,24 +154,39 @@ export async function POST(request: Request) {
       if (usedSignatures.size > 1024) usedSignatures.clear();
     }
 
-    // The shared gas paymaster must sponsor this DAO's agent account. Any DAO
-    // can be added by its own admin; fail with an actionable message instead of
-    // letting the frame transaction die in validation.
-    try {
-      const sponsored = await client.readContract({
-        address: paymaster,
-        abi: sharedDaoGasPaymasterAbi,
-        functionName: "allowedAgents",
-        args: [agentAccount],
-      });
-      if (!sponsored) {
+    // Prefer the agent's own ETH when it has enough: that removes the paymaster
+    // dependency entirely. Otherwise fall back to the shared sponsored path.
+    const agentBalance = await client.getBalance({ address: agentAccount });
+    const selfFunded =
+      agentBalance >=
+      parseEther(process.env.DAO_SELF_FUNDED_MIN_ETH ?? "0.01");
+
+    if (!selfFunded) {
+      if (!paymaster || !isAddress(paymaster)) {
         return bad(
-          "gas sponsorship is not enabled for this DAO. Open its console as the DAO admin and click Enable gas sponsorship.",
-          409,
+          "the agent has no ETH for gas and DAO_GAS_PAYMASTER is not configured",
+          503,
         );
       }
-    } catch {
-      // Legacy per-DAO paymaster without an allowlist: let the tx decide.
+      // The shared gas paymaster must sponsor this DAO's agent account. Any DAO
+      // can be added by its own admin; fail with an actionable message instead
+      // of letting the frame transaction die in validation.
+      try {
+        const sponsored = await client.readContract({
+          address: paymaster,
+          abi: sharedDaoGasPaymasterAbi,
+          functionName: "allowedAgents",
+          args: [agentAccount],
+        });
+        if (!sponsored) {
+          return bad(
+            "the agent has no ETH for gas and gas sponsorship is not enabled for this DAO. Fund the agent account or open the console as the DAO admin and click Enable gas sponsorship.",
+            409,
+          );
+        }
+      } catch {
+        // Legacy per-DAO paymaster without an allowlist: let the tx decide.
+      }
     }
 
     const expectedSigner = (await client.readContract({
@@ -200,7 +213,8 @@ export async function POST(request: Request) {
       nonce: BigInt(nonce),
       agentAccount,
       agentSigner: derived,
-      paymaster,
+      paymaster: selfFunded ? undefined : (paymaster as Address),
+      selfFunded,
       chargeData: CHARGE_CALLDATA,
       calls: [
         {

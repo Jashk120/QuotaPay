@@ -52,6 +52,29 @@ test("T22 DAO frame layouts", async (t) => {
     assert.equal(tx.signatures[0].signer, signer);
   });
 
+  await t.test("self-funded agent action drops the paymaster frames", () => {
+    const tx = buildAgentActionFrameTx({
+      chainId: 1337,
+      nonce: 10n,
+      agentAccount: AGENT_ACCOUNT,
+      agentSigner: signer,
+      selfFunded: true,
+      calls: [
+        { to: DAO_CORE, data: "0xaaaa0001" },
+        { to: DAO_CORE, data: "0xbbbb0002" },
+      ],
+    });
+
+    assert.equal(tx.sender, AGENT_ACCOUNT);
+    assert.equal(tx.frames.length, 3);
+    assert.deepEqual(tx.frames.map((frame) => frame.mode), [1, 2, 2]);
+    assert.deepEqual(tx.frames.map((frame) => frame.flags), [2, 4, 0]);
+    assert.ok(
+      tx.frames.every((frame) => frame.to !== PAYMASTER),
+      "no frame may target a paymaster in self-funded mode",
+    );
+  });
+
   await t.test("agent action signs and serializes as a frame tx", () => {
     const tx = buildAgentActionFrameTx({
       chainId: 1337,
